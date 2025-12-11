@@ -1,159 +1,333 @@
-/* Design encapsulé de la brique */
+/* --- VARIABLES --- */
+:root {
+  --evb-primary: #4f46e5; /* Indigo vibrant */
+  --evb-primary-light: #e0e7ff;
+  --evb-bg: #ffffff;
+  --evb-border: #e2e8f0;
+  --evb-border-hover: #6366f1;
+  --evb-text-main: #1e293b;
+  --evb-text-sub: #64748b;
+  --evb-error-bg: #fef2f2;
+  --evb-error-text: #b91c1c;
+  --evb-radius: 20px;
+  --evb-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- CONTAINER GLOBAL --- */
 .evb-container {
-  background: #ffffff;
-  border-radius: 24px;
-  padding: 30px;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08); /* Ombre douce */
+  background: var(--evb-bg);
+  border-radius: var(--evb-radius);
+  padding: 32px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.02), 
+    0 10px 15px -3px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0,0,0,0.02); /* Border subtile */
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: transform 0.3s ease;
+}
+
+/* Optionnel : petit lift au survol du bloc entier */
+.evb-container:hover {
+    box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.06), 
+    0 8px 10px -6px rgba(0, 0, 0, 0.03);
+}
+
+/* --- HEADER --- */
+.evb-header {
+    margin-bottom: 24px;
+}
+
+.evb-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 
 .evb-header h3 {
-  margin: 0 0 5px 0;
-  color: #1e293b;
+  margin: 0;
+  color: var(--evb-text-main);
   font-size: 1.25rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.evb-badge {
+    background: var(--evb-primary-light);
+    color: var(--evb-primary);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .evb-header p {
-  margin: 0 0 20px 0;
-  color: #64748b;
-  font-size: 0.9rem;
+  margin: 0;
+  color: var(--evb-text-sub);
+  font-size: 0.95rem;
+  font-weight: 400;
 }
 
-/* Zone de Drop */
+/* --- DROPZONE --- */
 .evb-dropzone {
-  border: 2px dashed #e2e8f0;
+  border: 2px dashed var(--evb-border);
   border-radius: 16px;
   background-color: #f8fafc;
-  height: 260px;
+  background-image: radial-gradient(#f1f5f9 1px, transparent 1px);
+  background-size: 20px 20px; /* Motif de points subtil */
+  height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--evb-transition);
   position: relative;
   overflow: hidden;
 }
 
-.evb-dropzone:hover, .evb-dropzone.evb-dragging {
-  border-color: #3b82f6;
-  background-color: #eff6ff;
-  transform: scale(1.01);
+/* Hover & Drag States */
+.evb-dropzone:hover, 
+.evb-dropzone.evb-dragging {
+  border-color: var(--evb-primary);
+  background-color: #eef2ff; /* Très léger bleu */
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.15);
 }
 
+.evb-dropzone.evb-dragging {
+    background-color: #e0e7ff;
+    transform: scale(1.02);
+}
+
+/* Loaded State */
 .evb-dropzone.evb-has-image {
-  border: none;
+  border: 2px solid transparent;
   background: #000;
   padding: 0;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
 }
 
-/* Placeholder (Vide) */
+/* --- PLACEHOLDER --- */
 .evb-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   pointer-events: none;
+  z-index: 2;
 }
 
 .evb-icon-circle {
-  width: 50px;
-  height: 50px;
-  background-color: #e0f2fe;
-  color: #0284c7;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  color: var(--evb-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.2);
+  /* Animation flottante */
+  animation: float 4s ease-in-out infinite;
 }
-.evb-icon-circle svg { width: 24px; height: 24px; }
+
+.evb-icon-circle svg { 
+    width: 28px; 
+    height: 28px; 
+    filter: drop-shadow(0 2px 4px rgba(79, 70, 229, 0.2));
+}
 
 .evb-text-main {
-  color: #334155;
+  color: var(--evb-text-main);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  margin-bottom: 4px;
 }
 
 .evb-text-sub {
-  color: #94a3b8;
-  font-size: 0.8rem;
-  margin-top: 5px;
+  color: var(--evb-text-sub);
+  font-size: 0.9rem;
 }
 
-/* Image chargée */
+.evb-link {
+    color: var(--evb-primary);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.evb-tags {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+}
+.evb-tags span {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+/* --- IMAGE PREVIEW --- */
 .evb-preview-wrapper {
   width: 100%;
   height: 100%;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-color: #0f172a; /* Fond sombre pour l'image */
 }
 
 .evb-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: contain; /* Ou cover selon préférence */
+  transition: transform 0.5s ease;
 }
 
-/* Overlay au survol */
+/* Effet Zoom sur l'image au survol du container */
+.evb-preview-wrapper:hover .evb-image {
+    transform: scale(1.05);
+    opacity: 0.8;
+}
+
+/* --- OVERLAY --- */
 .evb-overlay {
-  position: absolute; inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.2s ease;
-}
-.evb-dropzone:hover .evb-overlay { opacity: 1; }
-.evb-overlay span {
-  color: white; border: 1px solid rgba(255,255,255,0.8);
-  padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 500;
+  position: absolute; 
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px); /* Effet verre dépoli */
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  opacity: 0; 
+  transition: all 0.3s ease;
 }
 
-/* Bouton Supprimer */
-.evb-btn-remove {
-  position: absolute; top: 12px; right: 12px;
-  width: 32px; height: 32px;
-  border-radius: 50%; border: none;
-  background: rgba(255,255,255,0.95); color: #ef4444;
-  font-size: 18px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  transition: transform 0.2s; z-index: 10;
+.evb-dropzone:hover .evb-overlay { 
+    opacity: 1; 
 }
-.evb-btn-remove:hover { transform: scale(1.15); background: white; }
-/* --- NOUVEAU : Message d'erreur --- */
+
+.evb-overlay-content {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 10px 20px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    transform: translateY(10px);
+    transition: transform 0.3s ease;
+}
+
+.evb-dropzone:hover .evb-overlay-content {
+    transform: translateY(0);
+}
+
+.evb-overlay-content span {
+  color: var(--evb-text-main);
+  font-size: 0.9rem; 
+  font-weight: 600;
+}
+.evb-overlay-content svg {
+    width: 16px; height: 16px; color: var(--evb-primary);
+}
+
+/* --- REMOVE BUTTON CORRIGÉ --- */
+.evb-btn-remove {
+  position: absolute; 
+  top: 16px; 
+  right: 16px;
+  width: 36px; 
+  height: 36px;
+  border-radius: 50%; 
+  border: none;
+  background: #ffffff;
+  
+  /* On force la couleur ici */
+  color: #ef4444 !important; 
+  
+  cursor: pointer;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  padding: 0; /* Important pour centrer l'icône */
+}
+
+/* On force le trait du SVG à utiliser la couleur du bouton */
+.evb-btn-remove svg { 
+    width: 20px; 
+    height: 20px; 
+    stroke: currentColor; /* Cela dit "prends la couleur du texte définie au dessus" */
+    stroke-width: 2.5;    /* On épaissit un peu le trait pour qu'il soit bien visible */
+    display: block;       /* Évite les décalages bizarres */
+}
+
+/* Au survol */
+.evb-btn-remove:hover { 
+    transform: scale(1.1) rotate(90deg); 
+    background: #fee2e2;
+    color: #b91c1c !important; /* Rouge plus foncé au survol */
+}
+
+
+/* --- ERROR MESSAGE --- */
 .evb-error-message {
-  background-color: #fef2f2; /* Fond rouge très pâle */
-  color: #ef4444;            /* Texte rouge vif */
-  border: 1px solid #fee2e2;
-  padding: 12px;
+  background-color: var(--evb-error-bg);
+  color: var(--evb-error-text);
+  border: 1px solid #fecaca;
+  padding: 12px 16px;
   border-radius: 12px;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   font-size: 0.9rem;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 10px;
-  animation: slideDown 0.3s ease-out;
+  gap: 12px;
+  animation: slideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.1);
 }
 
-.evb-error-message svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
+.evb-error-icon-bg {
+    background: #fee2e2;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
 }
+.evb-error-icon-bg svg { width: 16px; height: 16px; stroke-width: 2.5; }
 
-/* --- MODIFICATION : Bordure rouge si erreur --- */
 .evb-dropzone.evb-has-error {
   border-color: #ef4444;
-  background-color: #fff1f2;
+  background-color: #fff5f5;
+  animation: shake 0.4s ease-in-out;
 }
 
-/* Petite animation pour que l'erreur apparaisse en douceur */
+/* --- ANIMATIONS --- */
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
