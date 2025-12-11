@@ -1,0 +1,212 @@
+/* --- CONFIGURATION GLOBALE --- */
+:root {
+  --primary-blue: #2563eb;       /* Bleu principal */
+  --dark-blue: #1e3a8a;          /* Bleu foncé (texte) */
+  --light-blue-bg: #f1f5f9;      /* Fond de page gris-bleu */
+  --hover-blue: #dbeafe;         /* Fond zone upload au survol */
+  --white: #ffffff;
+  --gray-text: #64748b;
+  --radius: 16px;
+  --shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--light-blue-bg);
+}
+
+/* --- CONTENEUR PRINCIPAL (Centre la carte au milieu de l'écran) --- */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+/* --- CARTE (Le cadre blanc) --- */
+.eye-card {
+  background: var(--white);
+  width: 100%;
+  max-width: 450px;
+  padding: 30px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.card-header h2 {
+  color: var(--dark-blue);
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+}
+
+.card-header p {
+  color: var(--gray-text);
+  font-size: 0.9rem;
+  margin: 0 0 25px 0;
+}
+
+/* --- ZONE D'UPLOAD --- */
+.upload-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  height: 260px; /* Hauteur fixe pour éviter que ça bouge */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Effet au survol ou pendant le drag & drop */
+.upload-zone:hover, .upload-zone.dragging {
+  border-color: var(--primary-blue);
+  background-color: var(--hover-blue);
+}
+
+/* Quand une image est chargée, on enlève la bordure pointillée */
+.upload-zone.has-image {
+  border-style: solid;
+  border-color: transparent;
+  background-color: black;
+  padding: 0;
+}
+
+/* --- CONTENU VIDE (ICONE + TEXTE) --- */
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none; /* Pour ne pas gêner le clic sur la zone */
+}
+
+.upload-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--primary-blue);
+  margin-bottom: 15px;
+  opacity: 0.8;
+}
+
+.upload-text {
+  color: var(--dark-blue);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.upload-hint {
+  color: var(--gray-text);
+  font-size: 0.8rem;
+}
+
+/* --- PRÉVISUALISATION IMAGE --- */
+.image-preview-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Overlay "Changer l'image" */
+.preview-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(30, 58, 138, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.upload-zone:hover .preview-overlay {
+  opacity: 1;
+}
+
+.preview-overlay span {
+  color: white;
+  border: 1px solid white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: rgba(0,0,0,0.2);
+}
+
+/* Bouton Supprimer (Croix) */
+.btn-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #ef4444;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 10;
+  transition: transform 0.2s;
+}
+
+.btn-remove:hover {
+  transform: scale(1.1);
+}
+
+/* --- FOOTER & BOUTON ACTION --- */
+.card-footer {
+  margin-top: 25px;
+}
+
+.btn-primary {
+  width: 100%;
+  background-color: var(--primary-blue);
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.btn-primary:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* Animation d'apparition */
+.fade-in {
+  animation: appear 0.4s ease-out;
+}
+
+@keyframes appear {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
