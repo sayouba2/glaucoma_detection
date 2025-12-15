@@ -1,9 +1,25 @@
 import React, { useState } from 'react';
+import { jsPDF } from "jspdf";
 import axios from 'axios';
 import { Upload, Eye, CheckCircle, AlertCircle, Loader2, FileImage, Info } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/uploadfile/';
-
+const getImageData = (url) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.setAttribute('crossOrigin', 'anonymous');
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg'));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+};
 const GlaucomaDetectionApp = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -85,46 +101,137 @@ const GlaucomaDetectionApp = () => {
       setError('');
       setAnalysisResult(null);
       setUploadStatus('Analyse en cours...');
-      
+
+      // Appel à l'API (Orchestrateur Port 8000)
       const response = await axios.post(API_URL, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      // Simulation d'un résultat d'analyse (à remplacer par vos données réelles)
-      const mockResult = {
-        confidence: 94.7,
-        hasGlaucoma: false,
-        riskLevel: 'FAIBLE',
-        analysisTime: 2.3,
-        message: "Aucun signe évident de glaucome détecté",
-        recommendations: [
-          "Contrôle annuel recommandé",
-          "Maintenir une pression intraoculaire normale",
-          "Consulter un ophtalmologue pour confirmation"
-        ]
+      // --- TRAITEMENT DES DONNÉES RÉELLES ---
+      const data = response.data; // La réponse de FastAPI
+      const analysis = data.analysis; // La partie spécifique au DL
+
+      // Si l'analyse a échoué côté backend (ex: service DL éteint)
+      if (data.analysis.error) {
+        throw new Error(data.analysis.error);
+      }
+
+      // Conversion des données Backend -> Frontend
+      const isGlaucoma = analysis.prediction_class === 1;
+      const confidencePercent = (analysis.probability * 100).toFixed(1);
+
+      // Génération dynamique des recommandations selon le résultat
+      const dynamicRecommendations = isGlaucoma
+          ? [
+            "Consulter un ophtalmologue dans les plus brefs délais",
+            "Effectuer un examen complet (fond d'œil, OCT)",
+            "Vérifier la pression intraoculaire"
+          ]
+          : [
+            "Aucune anomalie détectée pour le moment",
+            "Continuer les visites de contrôle annuelles",
+            "Surveiller l'apparition de troubles visuels"
+          ];
+
+      const realResult = {
+        confidence: confidencePercent,
+        hasGlaucoma: isGlaucoma,
+        // Mapping du label (ex: "Glaucoma Detected" -> "Risque de Glaucome détecté")
+        message: isGlaucoma ? "Signes de glaucome détectés par l'IA" : "L'analyse ne révèle pas de signes évidents",
+        recommendations: dynamicRecommendations,
+        // On ajoute l'image GradCAM reçue du backend !
+        gradcamImage: analysis.gradcam_image
       };
 
-      // Si votre API retourne des données, utilisez-les :
-      // setAnalysisResult(response.data);
-      
-      // Pour l'instant, utilisons le mock
-      setAnalysisResult(mockResult);
+      setAnalysisResult(realResult);
       setUploadStatus('✅ Analyse terminée avec succès');
-      
+
     } catch (err) {
+      console.error(err);
       const errorMessage = err.response && err.response.data && err.response.data.detail
-        ? `Erreur serveur : ${err.response.data.detail}`
-        : 'Échec de l\'analyse. Problème de connexion au serveur.';
-      
+          ? `Erreur serveur : ${err.response.data.detail}`
+          : 'Échec de l\'analyse. Vérifiez que le backend (port 8000) et le service DL (port 8001) sont lancés.';
+
       setError(errorMessage);
       setUploadStatus('');
     } finally {
       setIsAnalyzing(false);
     }
   };
+  const handleDownloadReport = async () => {
+    if (!analysisResult) return;
 
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // En-tête bleu
+    doc.setFillColor(41, 128, 185);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text("Rapport d'Analyse - Glaucoma Detection", 105, 20, { align: "center" });
+    doc.setFontSize(12);
+    doc.text(`Date : ${new Date().toLocaleDateString()}`, 105, 30, { align: "center" });
+
+    // Résultats
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.text("Résultat de l'analyse :", 20, 55);
+
+    doc.setFontSize(18);
+    if (analysisResult.hasGlaucoma) {
+      doc.setTextColor(231, 76, 60); // Rouge
+      doc.text(`⚠️ RISQUE DÉTECTÉ (${analysisResult.confidence}%)`, 20, 65);
+    } else {
+      doc.setTextColor(39, 174, 96); // Vert
+      doc.text(`✅ AUCUNE ANOMALIE DÉTECTÉE (${analysisResult.confidence}%)`, 20, 65);
+    }
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.text(`Message : ${analysisResult.message}`, 20, 75);
+
+    // Images
+    try {
+      doc.text("Images analysées :", 20, 95);
+
+      if (previewUrl) {
+        const base64Original = await getImageData(previewUrl);
+        doc.addImage(base64Original, 'JPEG', 20, 100, 70, 70);
+        doc.setFontSize(10);
+        doc.text("Original", 55, 175, { align: "center" });
+      }
+
+      if (analysisResult.gradcamImage) {
+        doc.addImage(analysisResult.gradcamImage, 'PNG', 110, 100, 70, 70);
+        doc.text("Analyse IA (Zones d'intérêt)", 145, 175, { align: "center" });
+      }
+    } catch (err) {
+      console.error("Erreur images PDF", err);
+    }
+
+    // Recommandations
+    doc.setFontSize(14);
+    doc.text("Recommandations :", 20, 195);
+    doc.setFontSize(11);
+    let yPos = 205;
+    analysisResult.recommendations.forEach((rec) => {
+      doc.text(`• ${rec}`, 25, yPos);
+      yPos += 8;
+    });
+
+    // Disclaimer
+    doc.setTextColor(150);
+    doc.setFontSize(10);
+    const disclaimer = "AVERTISSEMENT : Ce document est généré  à titre indicatif. Il ne remplace PAS un diagnostic médical. Consultez un ophtalmologue.";
+    const splitDisclaimer = doc.splitTextToSize(disclaimer, pageWidth - 40);
+    doc.text(splitDisclaimer, 20, 270);
+
+    doc.save("Rapport_Glaucome.pdf");
+  };
   const handleReset = () => {
     setSelectedFile(null);
     setPreviewUrl('');
@@ -252,6 +359,13 @@ const GlaucomaDetectionApp = () => {
                       </>
                     )}
                   </button>
+                  {/* ✅ AJOUTEZ CECI : Affichage du statut (uploadStatus) */}
+                  {uploadStatus && !error && (
+                      <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-xl text-center font-medium border border-blue-100 flex items-center justify-center gap-2">
+                        {isAnalyzing && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {uploadStatus}
+                      </div>
+                  )}
                 </div>
 
                 {/* Messages d'état */}
@@ -284,73 +398,78 @@ const GlaucomaDetectionApp = () => {
                 </div>
               </>
             ) : (
-              /* Étape 2 : Résultats */
-              <div className="space-y-6">
-                <div className="text-center mb-2">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                    <CheckCircle className="h-8 w-8 text-green-600" />
+                /* Étape 2 : Résultats */
+                <div className="space-y-6">
+                  <div className="text-center mb-2">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-blue-800">Analyse terminée</h2>
                   </div>
-                  <h2 className="text-2xl font-bold text-blue-800">Analyse terminée</h2>
-                  <p className="text-blue-600 mt-2">Résultats de l'analyse de l'image</p>
-                </div>
 
-                {/* Prévisualisation de l'image analysée */}
-                {previewUrl && (
-                  <div className="text-center">
-                    <p className="text-blue-700 font-medium mb-3">Image analysée :</p>
-                    <div className="relative inline-block">
+                  {/* --- MODIFICATION ICI : Affichage Original + GradCAM --- */}
+                  <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
+                    {/* Image Originale */}
+                    <div className="text-center">
+                      <p className="text-blue-700 font-medium mb-2 text-sm">Image Originale</p>
                       <img
-                        src={previewUrl}
-                        alt="Image analysée"
-                        className="w-64 h-64 object-cover rounded-xl border-2 border-blue-200 shadow-lg"
+                          src={previewUrl}
+                          alt="Image analysée"
+                          className="w-48 h-48 object-cover rounded-xl border-2 border-blue-200 shadow-md"
                       />
                     </div>
+
+                    {/* Image GradCAM (Si disponible) */}
+                    {analysisResult.gradcamImage && (
+                        <div className="text-center">
+                          <p className="text-blue-700 font-medium mb-2 text-sm">Analyse IA (Zones d'intérêt)</p>
+                          <img
+                              src={analysisResult.gradcamImage}
+                              alt="Visualisation GradCAM"
+                              className="w-auto h-48 object-contain rounded-xl border-2 border-purple-200 shadow-md"
+                          />
+                        </div>
+                    )}
                   </div>
-                )}
+                  {/* ------------------------------------------------------- */}
 
-                {/* Résultats détaillés */}
-                <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
-                  <h3 className="text-lg font-semibold text-blue-800 mb-4">Résultats de la détection</h3>
-                  
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className={`p-4 rounded-lg text-center ${analysisResult.hasGlaucoma ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-                      <p className="text-sm text-blue-600 mb-1">Statut</p>
-                      <p className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
-                        {analysisResult.hasGlaucoma ? 'Risque détecté' : 'Aucun risque détecté'}
-                      </p>
+                  {/* Résultats détaillés (Reste inchangé ou presque) */}
+                  <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-4">Détails de l'analyse</h3>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      {/* ... Le reste de votre code de grille ... */}
+                      <div className={`p-4 rounded-lg text-center ${analysisResult.hasGlaucoma ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+                        <p className="text-sm text-blue-600 mb-1">Diagnostic IA</p>
+                        <p className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
+                          {analysisResult.hasGlaucoma ? 'POSITIF (Risque)' : 'NÉGATIF (Sain)'}
+                        </p>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-lg border border-blue-100 text-center">
+                        <p className="text-sm text-blue-600 mb-1">Probabilité</p>
+                        <p className="text-2xl font-bold text-blue-700">{analysisResult.confidence}%</p>
+                      </div>
                     </div>
-                    
-                    <div className="bg-white p-4 rounded-lg border border-blue-100 text-center">
-                      <p className="text-sm text-blue-600 mb-1">Niveau de confiance</p>
-                      <p className="text-2xl font-bold text-blue-700">{analysisResult.confidence}%</p>
+
+                    {/* ... Le reste des recommandations ... */}
+                    <div className="space-y-4">
+                      {/* ... (votre code existant pour les recommandations) ... */}
+                      <div>
+                        <p className="text-sm text-blue-600 mb-2">Recommandations :</p>
+                        <ul className="space-y-2">
+                          {analysisResult.recommendations.map((rec, index) => (
+                              <li key={index} className="flex items-start gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-blue-700">{rec}</span>
+                              </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-blue-600 mb-1">Message d'analyse</p>
-                      <p className="font-medium text-blue-800">{analysisResult.message}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-blue-600 mb-2">Recommandations :</p>
-                      <ul className="space-y-2">
-                        {analysisResult.recommendations.map((rec, index) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span className="text-blue-700">{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="pt-4 border-t border-blue-200">
-                      <p className="text-sm text-blue-500 text-center">
-                        ⚠️ Ces résultats sont fournis à titre indicatif. Consultez un ophtalmologue pour un diagnostic médical complet.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  {/* ... Boutons d'action ... */}
 
                 {/* Actions */}
                 <div className="flex gap-4">
@@ -361,11 +480,8 @@ const GlaucomaDetectionApp = () => {
                     Analyser une nouvelle image
                   </button>
                   <button
-                    onClick={() => {
-                      // Fonctionnalité pour télécharger le rapport
-                      alert('Fonctionnalité de téléchargement du rapport à implémenter');
-                    }}
-                    className="flex-1 py-3 bg-white text-blue-600 border-2 border-blue-600 rounded-xl font-medium hover:bg-blue-50 transition-colors"
+                      onClick={handleDownloadReport}
+                      className="flex-1 py-3 bg-white text-blue-600 border-2 border-blue-600 rounded-xl font-medium hover:bg-blue-50 transition-colors"
                   >
                     Télécharger le rapport
                   </button>
