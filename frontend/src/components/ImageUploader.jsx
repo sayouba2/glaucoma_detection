@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { jsPDF } from "jspdf";
-import axios from 'axios';
-import { Upload, Eye, CheckCircle, AlertCircle, Loader2, FileImage, Info } from 'lucide-react';
+import api from '../utils/api';
+import { Upload, Eye, CheckCircle, AlertCircle, Loader2, FileImage, Info, Activity, FileText, RefreshCw } from 'lucide-react';
 
+// ... FONCTIONS UTILITAIRES ET API_URL INCHANGÉES ...
 const API_URL = 'http://localhost:8000/uploadfile/';
 const getImageData = (url) => {
   return new Promise((resolve, reject) => {
@@ -20,6 +21,7 @@ const getImageData = (url) => {
     img.src = url;
   });
 };
+
 const GlaucomaDetectionApp = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -31,477 +33,333 @@ const GlaucomaDetectionApp = () => {
   
   const MAX_SIZE_MB = 5;
 
-  // Gestion du drag and drop
-  const handleDragEnter = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
+  // ... TOUTES VOS FONCTIONS DE GESTION (drag, drop, file, upload, download) RESTENT ICI ...
+  // ... Je ne les répète pas pour gagner de la place, mais elles doivent être présentes dans le fichier final ...
+  // ... (handleDragEnter, handleDragLeave, handleDragOver, handleDrop, handleFile, handleFileChange, handleFileUpload, handleDownloadReport, handleReset) ...
+  
+  // (Je réinclus les handlers ici pour que tu puisses copier-coller tout le fichier si besoin)
+  const handleDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+  const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
   const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
+    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFile(files[0]);
-    }
+    if (files.length > 0) handleFile(files[0]);
   };
-
   const handleFile = (file) => {
-    setError('');
-    setAnalysisResult(null);
-    
+    setError(''); setAnalysisResult(null);
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       setError(`L'image est trop lourde. Maximum autorisé: ${MAX_SIZE_MB} Mo.`);
-      setSelectedFile(null);
-      setPreviewUrl('');
-      return;
+      setSelectedFile(null); setPreviewUrl(''); return;
     }
-
     if (!file.type.match('image.*')) {
-      setError('Veuillez sélectionner un fichier image valide.');
-      return;
+      setError('Veuillez sélectionner un fichier image valide.'); return;
     }
-
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file));
   };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      handleFile(file);
-    }
-  };
-
+  const handleFileChange = (event) => { const file = event.target.files[0]; if (file) handleFile(file); };
   const handleFileUpload = async () => {
-    if (!selectedFile) {
-      setError('Veuillez choisir une image d\'abord.');
+    if (!selectedFile) { setError("Veuillez choisir une image d'abord."); return; }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      const go = window.confirm("Vous devez être connecté pour lancer l'analyse. Voulez-vous vous connecter maintenant ?");
+      if (go) window.location.href = '/login';
       return;
     }
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
+    const formData = new FormData(); formData.append('file', selectedFile);
     try {
-      setIsAnalyzing(true);
-      setError('');
-      setAnalysisResult(null);
-      setUploadStatus('Analyse en cours...');
-
-      // Appel à l'API (Orchestrateur Port 8000)
-      const response = await axios.post(API_URL, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      // --- TRAITEMENT DES DONNÉES RÉELLES ---
-      const data = response.data; // La réponse de FastAPI
-      const analysis = data.analysis; // La partie spécifique au DL
-
-      // Si l'analyse a échoué côté backend (ex: service DL éteint)
-      if (data.analysis.error) {
-        throw new Error(data.analysis.error);
-      }
-
-      // Conversion des données Backend -> Frontend
+      setIsAnalyzing(true); setError(''); setAnalysisResult(null); setUploadStatus('Initialisation du modèle...');
+      const response = await api.post(API_URL, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const data = response.data;
+      const analysis = data.analysis;
+      if (analysis.error) throw new Error(analysis.error);
       const isGlaucoma = analysis.prediction_class === 1;
       const confidencePercent = (analysis.probability * 100).toFixed(1);
-
-      // Génération dynamique des recommandations selon le résultat
       const dynamicRecommendations = isGlaucoma
-          ? [
-            "Consulter un ophtalmologue dans les plus brefs délais",
-            "Effectuer un examen complet (fond d'œil, OCT)",
-            "Vérifier la pression intraoculaire"
-          ]
-          : [
-            "Aucune anomalie détectée pour le moment",
-            "Continuer les visites de contrôle annuelles",
-            "Surveiller l'apparition de troubles visuels"
-          ];
-
+        ? ["Consulter un ophtalmologue dans les plus brefs délais", "Effectuer un examen complet (fond d'œil, OCT)", "Vérifier la pression intraoculaire"]
+        : ["Aucune anomalie détectée pour le moment", "Continuer les visites de contrôle annuelles", "Surveiller l'apparition de troubles visuels"];
       const realResult = {
-        confidence: confidencePercent,
-        hasGlaucoma: isGlaucoma,
-        // Mapping du label (ex: "Glaucoma Detected" -> "Risque de Glaucome détecté")
+        confidence: confidencePercent, hasGlaucoma: isGlaucoma,
         message: isGlaucoma ? "Signes de glaucome détectés par l'IA" : "L'analyse ne révèle pas de signes évidents",
-        recommendations: dynamicRecommendations,
-        // On ajoute l'image GradCAM reçue du backend !
-        gradcamImage: analysis.gradcam_image
+        recommendations: dynamicRecommendations, gradcamImage: analysis.gradcam_image
       };
-
-      setAnalysisResult(realResult);
-      setUploadStatus('✅ Analyse terminée avec succès');
-
+      setAnalysisResult(realResult); setUploadStatus('Terminé');
     } catch (err) {
-      console.error(err);
-      const errorMessage = err.response && err.response.data && err.response.data.detail
-          ? `Erreur serveur : ${err.response.data.detail}`
-          : 'Échec de l\'analyse. Vérifiez que le backend (port 8000) et le service DL (port 8001) sont lancés.';
-
-      setError(errorMessage);
-      setUploadStatus('');
-    } finally {
-      setIsAnalyzing(false);
-    }
+    console.error(err);
+    // Ne pas afficher les détails techniques
+    setError("Une erreur s'est produite lors de l'analyse. Vérifiez que le fichier est valide et que vous êtes connecté.");
+    setUploadStatus('');
+  } finally { setIsAnalyzing(false); }
   };
   const handleDownloadReport = async () => {
     if (!analysisResult) return;
-
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-
-    // En-tête bleu
+    
+    // En-tête
     doc.setFillColor(41, 128, 185);
     doc.rect(0, 0, pageWidth, 40, 'F');
-
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
-    doc.text("Rapport d'Analyse - Glaucoma Detection", 105, 20, { align: "center" });
+    doc.text("Rapport d'Analyse - Glaucoma Detection", pageWidth / 2, 20, { align: "center" });
     doc.setFontSize(12);
-    doc.text(`Date : ${new Date().toLocaleDateString()}`, 105, 30, { align: "center" });
-
-    // Résultats
+    doc.text(`Date : ${new Date().toLocaleDateString()}`, pageWidth / 2, 30, { align: "center" });
+    
+    // Résultat (SANS emojis)
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(14);
     doc.text("Résultat de l'analyse :", 20, 55);
-
-    doc.setFontSize(18);
+    
+    doc.setFontSize(16);
+    const resultText = analysisResult.hasGlaucoma 
+      ? `RISQUE DÉTECTÉ (${analysisResult.confidence}%)`
+      : `AUCUNE ANOMALIE DÉTECTÉE (${analysisResult.confidence}%)`;
     if (analysisResult.hasGlaucoma) {
       doc.setTextColor(231, 76, 60); // Rouge
-      doc.text(`⚠️ RISQUE DÉTECTÉ (${analysisResult.confidence}%)`, 20, 65);
     } else {
       doc.setTextColor(39, 174, 96); // Vert
-      doc.text(`✅ AUCUNE ANOMALIE DÉTECTÉE (${analysisResult.confidence}%)`, 20, 65);
     }
-
+    doc.text(resultText, 20, 68);
+    
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
-    doc.text(`Message : ${analysisResult.message}`, 20, 75);
-
-    // Images
+    doc.text(`Message : ${analysisResult.message}`, 20, 80);
+    
+    // Images analysées
+    
     try {
-      doc.text("Images analysées :", 20, 95);
-
+      doc.setFontSize(13);
+      doc.text("Images analysées :", 20, 100);
+      
       if (previewUrl) {
         const base64Original = await getImageData(previewUrl);
-        doc.addImage(base64Original, 'JPEG', 20, 100, 70, 70);
+        doc.addImage(base64Original, 'JPEG', 10, 110, 85, 85);  // Augmenté à 85x85
         doc.setFontSize(10);
-        doc.text("Original", 55, 175, { align: "center" });
+        doc.text("Image Originale", 52.5, 200, { align: "center" });
       }
-
+      
       if (analysisResult.gradcamImage) {
-        doc.addImage(analysisResult.gradcamImage, 'PNG', 110, 100, 70, 70);
-        doc.text("Analyse IA (Zones d'intérêt)", 145, 175, { align: "center" });
+        doc.addImage(analysisResult.gradcamImage, 'PNG', 105, 110, 85, 85);  // Augmenté à 85x85
+        doc.setFontSize(10);
+        doc.text("Analyse IA (Grad-CAM)", 147.5, 200, { align: "center" });
       }
     } catch (err) {
       console.error("Erreur images PDF", err);
     }
-
+    
     // Recommandations
-    doc.setFontSize(14);
-    doc.text("Recommandations :", 20, 195);
+    doc.setFontSize(13);
+    doc.text("Recommandations :", 20, 205);
     doc.setFontSize(11);
-    let yPos = 205;
+    let yPos = 215;
     analysisResult.recommendations.forEach((rec) => {
-      doc.text(`• ${rec}`, 25, yPos);
-      yPos += 8;
+      const splitRec = doc.splitTextToSize(`• ${rec}`, 170);
+      doc.text(splitRec, 20, yPos);
+      yPos += splitRec.length * 6 + 2;
     });
-
+    
     // Disclaimer
     doc.setTextColor(150);
-    doc.setFontSize(10);
-    const disclaimer = "AVERTISSEMENT : Ce document est généré  à titre indicatif. Il ne remplace PAS un diagnostic médical. Consultez un ophtalmologue.";
+    doc.setFontSize(9);
+    const disclaimer = "AVERTISSEMENT : Ce document est généré à titre indicatif. Il ne remplace PAS un diagnostic médical. Consultez un ophtalmologue.";
     const splitDisclaimer = doc.splitTextToSize(disclaimer, pageWidth - 40);
     doc.text(splitDisclaimer, 20, 270);
-
+    
     doc.save("Rapport_Glaucome.pdf");
   };
-  const handleReset = () => {
-    setSelectedFile(null);
-    setPreviewUrl('');
-    setUploadStatus('');
-    setError('');
-    setAnalysisResult(null);
-    setIsAnalyzing(false);
-  };
+  const handleReset = () => { setSelectedFile(null); setPreviewUrl(''); setUploadStatus(''); setError(''); setAnalysisResult(null); setIsAnalyzing(false); };
 
+  // --- LE JSX REDESIGNÉ COMMENCE ICI ---
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        {/* Carte principale */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-blue-100">
-          
-          {/* En-tête */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-8 text-center">
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
-                <Eye className="h-10 w-10" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">Détection du Glaucome</h1>
-                <p className="text-blue-100 mt-2">Analyse d'images ophtalmologiques par IA</p>
-              </div>
+    <div className="max-w-6xl mx-auto fade-in">
+      
+      {/* Header de la carte principale */}
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 mb-8">
+        {!analysisResult ? (
+          <>
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-600 p-8 md:p-12 text-center text-white relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <h1 className="text-3xl md:text-4xl font-bold mb-3 relative z-10">Centre d'Analyse Rétinienne</h1>
+                <p className="text-blue-100 text-lg relative z-10 max-w-2xl mx-auto">
+                    Utilisez notre IA de pointe pour détecter les signes précoces de glaucome à partir d'images de fond d'œil.
+                </p>
             </div>
-          </div>
 
-          {/* Contenu principal */}
-          <div className="p-8">
-            {/* Étape 1 : Téléversement */}
-            {!analysisResult ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-xl font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                    <span className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full">1</span>
-                    Téléversez votre image
-                  </h2>
-                  <p className="text-blue-600 mb-6">Sélectionnez une image de l'œil pour analyse</p>
-
-                  {/* Zone de drag & drop */}
-                  <div
-                    className={`border-3 border-dashed rounded-2xl p-8 text-center transition-all duration-300 mb-6
-                      ${isDragging ? 'border-blue-500 bg-blue-50 border-blue-500' : 'border-blue-200'}
-                      ${!previewUrl ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+            <div className="p-8 md:p-12">
+                {/* Zone de Drag & Drop Améliorée */}
+                <div 
+                    className={`
+                        relative group border-3 border-dashed rounded-3xl p-12 text-center transition-all duration-300
+                        ${isDragging 
+                            ? 'border-blue-500 bg-blue-50/50 scale-[1.01]' 
+                            : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'
+                        }
+                        ${!previewUrl ? 'cursor-pointer' : ''}
+                    `}
                     onDragEnter={handleDragEnter}
                     onDragLeave={handleDragLeave}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => !previewUrl && document.getElementById('fileInput').click()}
-                  >
+                >
                     {!previewUrl ? (
-                      <>
-                        <div className="p-4 bg-blue-50 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                          <FileImage className="h-12 w-12 text-blue-500" />
+                        <div className="flex flex-col items-center">
+                            <div className="p-5 bg-blue-100 text-blue-600 rounded-full mb-6 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                                <Upload size={40} strokeWidth={1.5} />
+                            </div>
+                            <h3 className="text-xl font-semibold text-slate-800 mb-2">Glissez-déposez votre image ici</h3>
+                            <p className="text-slate-500 mb-6">Supporte JPG, PNG, JPEG (Max {MAX_SIZE_MB} Mo)</p>
+                            <label className="cursor-pointer bg-blue-600 text-white px-8 py-3 rounded-full font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95">
+                                Parcourir les fichiers
+                            </label>
                         </div>
-                        <p className="text-blue-700 font-medium text-lg mb-3">
-                          Glissez-déposez votre image
-                        </p>
-                        <p className="text-blue-500 mb-4">ou</p>
-                        <label htmlFor="fileInput" className="cursor-pointer">
-                          <div className="bg-blue-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors inline-flex items-center gap-2 text-lg">
-                            <Upload className="h-5 w-5" />
-                            Sélectionner un fichier
-                          </div>
-                        </label>
-                        <p className="text-blue-400 text-sm mt-6">
-                          Formats: JPG, PNG, JPEG • Max {MAX_SIZE_MB} Mo
-                        </p>
-                      </>
                     ) : (
-                      <div className="space-y-6">
-                        <div className="relative mx-auto max-w-xs">
-                          <img
-                            src={previewUrl}
-                            alt="Aperçu"
-                            className="w-full h-48 object-cover rounded-xl border-2 border-blue-200 shadow-lg"
-                          />
+                        <div className="flex flex-col items-center relative z-10">
+                            <div className="relative group/img">
+                                <img src={previewUrl} alt="Preview" className="h-64 object-contain rounded-lg shadow-md bg-black/5" />
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleReset(); }}
+                                    className="absolute -top-3 -right-3 bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600 transition-colors"
+                                    title="Supprimer l'image"
+                                >
+                                    <RefreshCw size={16} />
+                                </button>
+                            </div>
+                            <p className="mt-4 text-slate-600 font-medium bg-slate-100 px-4 py-1 rounded-full text-sm">
+                                {selectedFile?.name} ({Math.round(selectedFile?.size / 1024)} KB)
+                            </p>
                         </div>
-                        <div className="text-center">
-                          <p className="text-blue-700 font-medium truncate text-lg">{selectedFile?.name}</p>
-                          <p className="text-blue-500">
-                            {Math.round(selectedFile?.size / 1024)} KB
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReset();
-                          }}
-                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2 mx-auto"
-                        >
-                          <span>Changer d'image</span>
-                        </button>
-                      </div>
                     )}
-                    <input
-                      id="fileInput"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-
-                  {/* Bouton d'analyse */}
-                  <button
-                    onClick={handleFileUpload}
-                    disabled={!selectedFile || isAnalyzing}
-                    className={`w-full py-4 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3
-                      ${!selectedFile || isAnalyzing
-                        ? 'bg-blue-300 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-                      } text-white`}
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                        Analyse en cours...
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-6 w-6" />
-                        Démarrer l'analyse
-                      </>
-                    )}
-                  </button>
-                  {/* ✅ AJOUTEZ CECI : Affichage du statut (uploadStatus) */}
-                  {uploadStatus && !error && (
-                      <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-xl text-center font-medium border border-blue-100 flex items-center justify-center gap-2">
-                        {isAnalyzing && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {uploadStatus}
-                      </div>
-                  )}
+                    <input id="fileInput" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                 </div>
 
-                {/* Messages d'état */}
+                {/* Status et Erreurs */}
                 {error && (
-                  <div className="p-4 rounded-xl mb-6 bg-red-50 border border-red-200">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-red-800">Erreur</p>
-                        <p className="text-red-600 text-sm mt-1">{error}</p>
-                      </div>
+                    <div className="mt-6 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl flex items-center gap-3 animate-pulse">
+                        <AlertCircle className="flex-shrink-0" /> {error}
                     </div>
-                  </div>
                 )}
 
-                {/* Informations */}
-                <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-blue-800 mb-2">Pour une analyse optimale :</p>
-                      <ul className="text-blue-600 text-sm space-y-1">
-                        <li>• Image centrée sur la rétine</li>
-                        <li>• Bon éclairage sans reflets</li>
-                        <li>• Format JPG ou PNG recommandé</li>
-                        <li>• Résolution minimum 1024x768 pixels</li>
-                      </ul>
-                    </div>
-                  </div>
+                {/* Bouton d'action */}
+                <div className="mt-8 flex justify-center">
+                    <button
+                        onClick={handleFileUpload}
+                        disabled={!selectedFile || isAnalyzing}
+                        className={`
+                            px-12 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center gap-3
+                            ${!selectedFile || isAnalyzing 
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-2xl hover:-translate-y-1 hover:from-blue-700 hover:to-indigo-700'
+                            }
+                        `}
+                    >
+                        {isAnalyzing ? <><Loader2 className="animate-spin" /> Analyse en cours...</> : <><Activity /> Lancer le diagnostic</>}
+                    </button>
                 </div>
-              </>
-            ) : (
-                /* Étape 2 : Résultats */
-                <div className="space-y-6">
-                  <div className="text-center mb-2">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                      <CheckCircle className="h-8 w-8 text-green-600" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-blue-800">Analyse terminée</h2>
-                  </div>
 
-                  {/* --- MODIFICATION ICI : Affichage Original + GradCAM --- */}
-                  <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
-                    {/* Image Originale */}
-                    <div className="text-center">
-                      <p className="text-blue-700 font-medium mb-2 text-sm">Image Originale</p>
-                      <img
-                          src={previewUrl}
-                          alt="Image analysée"
-                          className="w-48 h-48 object-cover rounded-xl border-2 border-blue-200 shadow-md"
-                      />
+                {uploadStatus && !error && isAnalyzing && (
+                    <div className="mt-4 text-center text-blue-600 font-medium animate-pulse">{uploadStatus}</div>
+                )}
+            </div>
+            
+            {/* Guide Info */}
+            <div className="bg-blue-50/50 p-6 border-t border-slate-100 flex gap-4 items-start">
+                <Info className="text-blue-500 mt-1 flex-shrink-0" />
+                <div className="text-sm text-slate-600">
+                    <p className="font-semibold text-slate-800 mb-1">Conseils pour de meilleurs résultats :</p>
+                    <ul className="list-disc ml-4 space-y-1">
+                        <li>Assurez-vous que la rétine est bien visible et centrée.</li>
+                        <li>Évitez les images floues ou avec trop de reflets.</li>
+                        <li>La résolution doit être suffisante (min 800x800px recommandé).</li>
+                    </ul>
+                </div>
+            </div>
+          </>
+        ) : (
+          /* SECTION RÉSULTATS */
+          <div className="bg-slate-50 min-h-[600px] flex flex-col md:flex-row">
+            
+            {/* Sidebar Résultats (Gauche) */}
+            <div className="w-full md:w-1/3 bg-white p-8 border-r border-slate-200 flex flex-col">
+                <div className="mb-8 text-center md:text-left">
+                    <h2 className="text-sm uppercase tracking-wider text-slate-400 font-bold mb-2">Diagnostic</h2>
+                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full font-bold text-lg ${analysisResult.hasGlaucoma ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                        {analysisResult.hasGlaucoma ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
+                        {analysisResult.hasGlaucoma ? 'Glaucome Détecté' : 'Œil Sain'}
                     </div>
+                </div>
 
-                    {/* Image GradCAM (Si disponible) */}
+                <div className="mb-8">
+                    <h2 className="text-sm uppercase tracking-wider text-slate-400 font-bold mb-2">Confiance IA</h2>
+                    <div className="flex items-end gap-2 mb-2">
+                        <span className="text-4xl font-bold text-slate-800">{analysisResult.confidence}%</span>
+                        <span className="text-slate-500 mb-1">de certitude</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                        <div 
+                            className={`h-full rounded-full transition-all duration-1000 ${analysisResult.hasGlaucoma ? 'bg-red-500' : 'bg-green-500'}`} 
+                            style={{ width: `${analysisResult.confidence}%` }}
+                        ></div>
+                    </div>
+                </div>
+
+                <div className="flex-grow">
+                    <h2 className="text-sm uppercase tracking-wider text-slate-400 font-bold mb-3">Recommandations</h2>
+                    <ul className="space-y-3">
+                        {analysisResult.recommendations.map((rec, i) => (
+                            <li key={i} className="flex gap-3 text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></div>
+                                {rec}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col gap-3">
+                    <button onClick={handleDownloadReport} className="flex items-center justify-center gap-2 w-full py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors">
+                        <FileText size={18} /> Télécharger le rapport
+                    </button>
+                    <button onClick={handleReset} className="flex items-center justify-center gap-2 w-full py-3 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        <RefreshCw size={18} /> Nouvelle analyse
+                    </button>
+                </div>
+            </div>
+
+            {/* Visualisation Images (Droite) */}
+            <div className="w-full md:w-2/3 p-8 flex flex-col items-center justify-center bg-slate-50/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-3xl">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                        <p className="text-center font-medium text-slate-500 mb-3">Image Originale</p>
+                        <div className="aspect-square rounded-xl overflow-hidden bg-black/5 relative">
+                             <img src={previewUrl} className="w-full h-full object-contain" alt="Original" />
+                        </div>
+                    </div>
                     {analysisResult.gradcamImage && (
-                        <div className="text-center">
-                          <p className="text-blue-700 font-medium mb-2 text-sm">Analyse IA (Zones d'intérêt)</p>
-                          <img
-                              src={analysisResult.gradcamImage}
-                              alt="Visualisation GradCAM"
-                              className="w-auto h-48 object-contain rounded-xl border-2 border-purple-200 shadow-md"
-                          />
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                            <p className="text-center font-medium text-purple-600 mb-3 flex items-center justify-center gap-2">
+                                <Activity size={16}/> Analyse Grad-CAM
+                            </p>
+                            <div className="aspect-square rounded-xl overflow-hidden bg-black/5 relative">
+                                <img src={analysisResult.gradcamImage} className="w-full h-full object-contain" alt="IA Analysis" />
+                            </div>
+                            <p className="text-xs text-center text-slate-400 mt-2">Les zones chaudes indiquent les focus de l'IA</p>
                         </div>
                     )}
-                  </div>
-                  {/* ------------------------------------------------------- */}
-
-                  {/* Résultats détaillés (Reste inchangé ou presque) */}
-                  <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-4">Détails de l'analyse</h3>
-
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      {/* ... Le reste de votre code de grille ... */}
-                      <div className={`p-4 rounded-lg text-center ${analysisResult.hasGlaucoma ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-                        <p className="text-sm text-blue-600 mb-1">Diagnostic IA</p>
-                        <p className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
-                          {analysisResult.hasGlaucoma ? 'POSITIF (Risque)' : 'NÉGATIF (Sain)'}
-                        </p>
-                      </div>
-
-                      <div className="bg-white p-4 rounded-lg border border-blue-100 text-center">
-                        <p className="text-sm text-blue-600 mb-1">Probabilité</p>
-                        <p className="text-2xl font-bold text-blue-700">{analysisResult.confidence}%</p>
-                      </div>
-                    </div>
-
-                    {/* ... Le reste des recommandations ... */}
-                    <div className="space-y-4">
-                      {/* ... (votre code existant pour les recommandations) ... */}
-                      <div>
-                        <p className="text-sm text-blue-600 mb-2">Recommandations :</p>
-                        <ul className="space-y-2">
-                          {analysisResult.recommendations.map((rec, index) => (
-                              <li key={index} className="flex items-start gap-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                                <span className="text-blue-700">{rec}</span>
-                              </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ... Boutons d'action ... */}
-
-                {/* Actions */}
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleReset}
-                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Analyser une nouvelle image
-                  </button>
-                  <button
-                      onClick={handleDownloadReport}
-                      className="flex-1 py-3 bg-white text-blue-600 border-2 border-blue-600 rounded-xl font-medium hover:bg-blue-50 transition-colors"
-                  >
-                    Télécharger le rapport
-                  </button>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Pied de page */}
-          <div className="bg-blue-50 p-6 border-t border-blue-100">
-            <div className="text-center">
-              <p className="text-blue-600 text-sm">
-                Système de détection du glaucome par IA • © 2024
-              </p>
-              <p className="text-blue-400 text-xs mt-2">
-                Cet outil ne remplace pas une consultation médicale professionnelle
-              </p>
+                
+                <div className="mt-8 text-center max-w-2xl">
+                    <p className="text-slate-600 italic">
+                        "{analysisResult.message}"
+                    </p>
+                </div>
             </div>
           </div>
-        </div>
+        )}
+      </div>
+      
+      {/* Footer minimaliste */}
+      <div className="text-center text-slate-400 text-xs pb-8">
+        IA Glaucoma Detection v1.0 • Ne remplace pas un avis médical.
       </div>
     </div>
   );
