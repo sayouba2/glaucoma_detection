@@ -1,14 +1,38 @@
-# backend/main.py
+# backend/uploads/main.py
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import shutil
 import os
-import httpx # Nécessaire pour appeler l'autre API (pip install httpx)
+import httpx
+import asyncio
+import logging
 
-app = FastAPI()
+# 👇 IMPORT DEPUIS TON NOUVEAU FICHIER
+from cleanup import start_cleanup_loop
 
-# Configuration CORS
-origins = ["http://localhost:5173"]
+# --- Configuration ---
+UPLOAD_DIRECTORY = "uploaded_images"
+DL_SERVICE_URL = "http://localhost:8001/analyze/"
+TTL_MINUTES = 10
+
+logging.basicConfig(level=logging.INFO)
+
+# --- LIFESPAN (Gestion du cycle de vie) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. Démarrage : On lance la boucle importée en tâche de fond
+    task = asyncio.create_task(
+        start_cleanup_loop(UPLOAD_DIRECTORY, TTL_MINUTES)
+    )
+    yield
+    # 2. Arrêt : On annule la tâche proprement
+    task.cancel()
+
+app = FastAPI(lifespan=lifespan)
+
+# --- Le reste de ton code reste identique ---
+origins = ["http://localhost:3000", "http://localhost:5173"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -17,18 +41,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Constantes
-UPLOAD_DIRECTORY = "uploaded_images"
-DL_SERVICE_URL = "http://localhost:8001/analyze/"  # L'adresse de votre service DL
 os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
 @app.post("/uploadfile/")
 async def create_upload_file(file: UploadFile = File(...)):
-    # 1. Validation basique
+    # ... (Ton code d'upload existant ne change pas) ...
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Fichier invalide.")
 
-    # 2. STOCKAGE : Sauvegarde sur le disque du backend
     file_location = os.path.join(UPLOAD_DIRECTORY, file.filename)
     try:
         with open(file_location, "wb") as buffer:
@@ -36,14 +56,11 @@ async def create_upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur de sauvegarde: {e}")
     finally:
-        await file.close() # On ferme le flux entrant
+        await file.close()
 
-    # 3. ANALYSE : Appel au service de Deep Learning
-    # On rouvre le fichier qu'on vient de sauvegarder pour l'envoyer au DL
     analysis_result = {}
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client: # Timeout long pour le DL
-            # On lit le fichier depuis le disque
+        async with httpx.AsyncClient(timeout=60.0) as client:
             with open(file_location, "rb") as f:
                 files = {'file': (file.filename, f, file.content_type)}
                 response = await client.post(DL_SERVICE_URL, files=files)
@@ -51,15 +68,12 @@ async def create_upload_file(file: UploadFile = File(...)):
             if response.status_code == 200:
                 analysis_result = response.json()
             else:
-                analysis_result = {"error": "Le service DL a renvoyé une erreur", "details": response.text}
-
+                analysis_result = {"error": "Erreur DL Service", "details": response.text}
     except httpx.RequestError:
-        analysis_result = {"error": "Le service DL est injoignable (est-il lancé ?)"}
+        analysis_result = {"error": "Service DL injoignable"}
 
-    # 4. RETOUR AU FRONTEND
-    # On renvoie le nom du fichier stocké ET les résultats de l'analyse
     return {
         "filename": file.filename,
-        "message": "Image stockée et analysée avec succès.",
+        "message": "Succès",
         "analysis": analysis_result
     }
