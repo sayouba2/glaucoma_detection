@@ -62,15 +62,6 @@ Ce service gère PyTorch et le traitement d’images lourds.
 ```bash
 cd backend/DL_API
 
-# Créer un environnement virtuel (recommandé)
-python -m venv venv
-
-# Activer l'environnement (Windows)
-.\venv\Scripts\activate
-
-# Activer l'environnement (Mac / Linux)
-source venv/bin/activate
-
 # Installer les dépendances IA
 pip install -r requirements.txt
 ```
@@ -87,12 +78,6 @@ Ce service gère les requêtes du frontend et le stockage de fichiers.
 
 ```bash
 cd backend/uploads
-
-# Créer un environnement virtuel
-python -m venv venv
-
-# Activer l'environnement (Windows)
-.\venv\Scripts\activate
 
 # Installer les dépendances API
 pip install -r requirements.txt
@@ -190,4 +175,3 @@ Vous n’êtes pas dans le bon dossier.
 cd frontend
 npm run dev
 ```
-
