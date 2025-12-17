@@ -1,24 +1,98 @@
-# Logs
-logs
-*.log
+# ========== FRONTEND ==========
+# Node
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Build
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ========== BACKEND ==========
+# Python venv
+venv/
+env/
+ENV/
+backend/venv/
+backend/DL_API/venv/
+backend/uploads/venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ========== DATABASE ==========
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# ========== MODEL ==========
+# Les gros fichiers modèles (optionnel, à adapter)
+# *.pth
+# *.pt
+# *.h5
+# *.pkl
+
+# ========== UPLOADS ==========
+backend/uploads/uploaded_images/
+
+# ========== ENVIRONNEMENT ==========
+.env
+.env.local
+.env.*.local
+
+# ========== SYSTÈME ==========
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ========== IDE & OUTILS ==========
+*.sublime-project
+*.sublime-workspace
+.vscode/
+.vim/
+.emacs
+.settings/
+.classpath
+.c9/
+*.launch
+.tern-port
