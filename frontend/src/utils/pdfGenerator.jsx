@@ -1,7 +1,5 @@
-// src/utils/pdfGenerator.js
 import { jsPDF } from "jspdf";
 
-// Fonction helper pour convertir l'image en Base64
 const getImageData = (url) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -23,84 +21,118 @@ export const generateGlaucomaReport = async (data, imageUrl) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // --- EN-TÊTE ---
-    doc.setFillColor(41, 128, 185); // Bleu médical
+    // --- EN-TÊTE CLINIQUE ---
+    doc.setFillColor(248, 250, 252); // Gris très clair
     doc.rect(0, 0, pageWidth, 40, 'F');
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text("Rapport d'Analyse - Glaucome IA", 105, 20, { align: "center" });
-
-    doc.setFontSize(12);
-    // On utilise la date fournie ou la date du jour
-    const dateStr = data.timestamp ? new Date(data.timestamp).toLocaleDateString() : new Date().toLocaleDateString();
-    doc.text(`Date : ${dateStr} - ID: ${data.id || Math.floor(Math.random() * 10000)}`, 105, 30, { align: "center" });
-
-    // --- RÉSULTATS ---
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(14);
-    doc.text("Résultat de l'analyse :", 20, 55);
-
-    const confidencePercent = (data.confidence * 100).toFixed(1);
-
+    doc.setTextColor(30, 58, 138); // Bleu foncé professionnel
     doc.setFontSize(18);
-    if (data.hasGlaucoma) {
-        doc.setTextColor(231, 76, 60); // Rouge
-        doc.text(`⚠️ RISQUE DÉTECTÉ (${confidencePercent}%)`, 20, 65);
-    } else {
-        doc.setTextColor(39, 174, 96); // Vert
-        doc.text(`✅ AUCUNE ANOMALIE DÉTECTÉE (${confidencePercent}%)`, 20, 65);
-    }
+    doc.setFont("helvetica", "bold");
+    doc.text(data.clinicName || "Clinique Ophtalmologique", 20, 15);
 
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    const message = data.hasGlaucoma ? "Signes de glaucome détectés par l'IA" : "L'analyse ne révèle pas de signes évidents";
-    doc.text(`Message : ${message}`, 20, 75);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Dr. ${data.doctorName || "Médecin Traitant"}`, 20, 22);
+    doc.text(`Date du rapport : ${new Date().toLocaleDateString()}`, 20, 27);
 
-    // --- IMAGES ---
+    doc.setFontSize(22);
+    doc.setTextColor(0);
+    doc.text("COMPTE-RENDU D'EXAMEN", pageWidth - 20, 25, { align: "right" });
+
+    // --- INFO PATIENT ---
+    doc.setDrawColor(200);
+    doc.line(20, 45, pageWidth - 20, 45);
+
+    doc.setFontSize(11);
+    doc.setTextColor(50);
+    doc.text(`Patient : ${data.patientName}`, 20, 55);
+    doc.text(`ID : #${data.patientId}`, 100, 55);
+    doc.text(`Âge : ${data.patientAge} ans`, 160, 55);
+    doc.text(`Sexe : ${data.patientGender}`, pageWidth - 20, 55, { align: "right" });
+
+    // --- IMAGE & TECHNIQUE ---
+    let yPos = 70;
     if (imageUrl) {
         try {
-            doc.text("Image analysée :", 20, 95);
+            doc.text("Imagerie Rétinienne :", 20, yPos);
             const base64Original = await getImageData(imageUrl);
-            doc.addImage(base64Original, 'JPEG', 20, 100, 70, 70);
+            // Image carrée à gauche
+            doc.addImage(base64Original, 'JPEG', 20, yPos + 5, 50, 50);
+
+            // Détails techniques à droite de l'image
             doc.setFontSize(10);
-            doc.text("Fond d'œil", 55, 175, { align: "center" });
+            doc.text(`• Œil examiné : ${data.eyeSide || "Non spécifié"}`, 80, yPos + 10);
+            doc.text(`• Qualité image : ${data.imageQuality || "Bonne"}`, 80, yPos + 18);
+            doc.text(`• Analyse IA : ${data.aiResult}`, 80, yPos + 26);
+            doc.text(`• Confiance : ${data.aiConfidence}%`, 80, yPos + 34);
+
+            yPos += 65;
         } catch (err) {
-            console.error("Impossible d'ajouter l'image au PDF (peut-être expirée ?)", err);
-            doc.text("(Image non disponible ou expirée)", 20, 110);
+            console.error(err);
         }
     }
 
-    // --- RECOMMANDATIONS (Générées dynamiquement) ---
-    const recommendations = data.hasGlaucoma
-        ? [
-            "Consulter un ophtalmologue dans les plus brefs délais",
-            "Effectuer un examen complet (fond d'œil, OCT)",
-            "Vérifier la pression intraoculaire"
-        ]
-        : [
-            "Aucune anomalie détectée pour le moment",
-            "Continuer les visites de contrôle annuelles",
-            "Surveiller l'apparition de troubles visuels"
-        ];
+    // --- OBSERVATIONS CLINIQUES (Le cœur du rapport) ---
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("OBSERVATIONS CLINIQUES", 20, yPos);
 
-    doc.setFontSize(14);
-    doc.text("Recommandations :", 20, 195);
-
-    doc.setFontSize(11);
-    let yPos = 205;
-    recommendations.forEach((rec) => {
-        doc.text(`• ${rec}`, 25, yPos);
-        yPos += 8;
-    });
-
-    // --- FOOTER ---
-    doc.setTextColor(150);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    const disclaimer = "AVERTISSEMENT : Ce document est généré par une intelligence artificielle à titre indicatif. Il ne remplace PAS un diagnostic médical réalisé par un professionnel de santé.";
-    const splitDisclaimer = doc.splitTextToSize(disclaimer, pageWidth - 40);
-    doc.text(splitDisclaimer, 20, 270);
+    doc.setTextColor(60);
+    yPos += 7;
 
-    // Nom du fichier
-    doc.save(`Rapport_Glaucome_${data.id || 'scan'}.pdf`);
+    // Gestion du texte long (Observation)
+    const splitObservations = doc.splitTextToSize(data.observations || "Aucune observation particulière.", pageWidth - 40);
+    doc.text(splitObservations, 20, yPos);
+    yPos += splitObservations.length * 5 + 10;
+
+    // --- DIAGNOSTIC & CONCLUSION ---
+    doc.setFillColor(240, 249, 255); // Fond bleu très léger
+    doc.rect(15, yPos, pageWidth - 30, 25, 'F');
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 58, 138);
+    doc.text("CONCLUSION / DIAGNOSTIC :", 20, yPos + 8);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
+    doc.setFontSize(11);
+    doc.text(data.diagnosis || "À définir", 20, yPos + 18);
+
+    yPos += 35;
+
+    // --- CONDUITE À TENIR (Recommandations) ---
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("CONDUITE À TENIR :", 20, yPos);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    yPos += 7;
+
+    if (data.recommendations && data.recommendations.length > 0) {
+        data.recommendations.forEach(rec => {
+            doc.text(`• ${rec}`, 25, yPos);
+            yPos += 6;
+        });
+    } else {
+        doc.text("• Voir recommandations habituelles.", 25, yPos);
+    }
+
+    // --- FOOTER / SIGNATURE ---
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    doc.setFontSize(10);
+    doc.text("Signature du Médecin :", pageWidth - 60, pageHeight - 40);
+    // Ligne de signature
+    doc.line(pageWidth - 60, pageHeight - 25, pageWidth - 20, pageHeight - 25);
+
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text("Rapport généré par GlaucomaAI - Aide au diagnostic.", 20, pageHeight - 10);
+
+    doc.save(`CR_${data.patientName.replace(' ', '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

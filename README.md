@@ -1,24 +1,21 @@
 
----
-
-````markdown
 # 👁️ Glaucoma Detection AI
 
-Une application web complète pour la détection du glaucome à partir d'images de fond d'œil.  
-Ce projet utilise une architecture **Microservices** avec un frontend **React** et deux APIs **FastAPI** (Orchestration & Deep Learning).
+Une application web complète pour la détection du glaucome à partir d'images de fond d'œil.
+Ce projet utilise une architecture **microservices** avec un frontend **React** et deux APIs **FastAPI** (Orchestrateur & Deep Learning).
 
 ---
 
 ## 🚀 Fonctionnalités
 
-- **Upload d'image** : Interface Drag & Drop intuitive  
-- **Analyse IA** : Détection du glaucome via un modèle *MobileNetV3* pré-entraîné  
-- **Explicabilité (XAI)** : Visualisation *Grad-CAM* (Heatmap)  
-- **Rapport PDF** : Génération et téléchargement d'un rapport médical côté client  
+- Upload d'image : interface Drag & Drop intuitive
+- Analyse IA : détection du glaucome via un modèle *MobileNetV3* pré‑entraîné
+- Explicabilité (XAI) : visualisation *Grad‑CAM* (heatmap)
+- Rapport PDF : génération et téléchargement d'un rapport médical côté client
 
 ---
 
-## 📂 Structure du Projet
+## 📂 Structure du projet
 
 L'architecture est divisée en trois dossiers principaux :
 
@@ -36,16 +33,18 @@ L'architecture est divisée en trois dossiers principaux :
 │       ├── main.py
 │       ├── uploaded_images/  # Stockage temporaire
 │       └── requirements.txt  # Dépendances API (FastAPI, HTTPX…)
-````
+```
 
 ---
 
-## 🛠️ Pré-requis
+## 🛠️ Pré‑requis
 
-Assurez-vous d'avoir installé :
+Assurez‑vous d'avoir installé :
 
-* **Node.js** (v16+) et **npm**
-* **Python** (v3.9+)
+- Node.js (v16+) et npm
+- Python (v3.9+)
+
+Optionnel mais recommandé : créer et activer un environnement virtuel Python pour chaque service backend.
 
 ---
 
@@ -53,123 +52,106 @@ Assurez-vous d'avoir installé :
 
 Il est recommandé d’ouvrir **3 terminaux** différents pour installer et lancer les trois parties du projet.
 
----
+### 1️⃣ Service IA (DL_API)
 
-### 1️⃣ Installation du Service IA (DL_API)
-
-Ce service gère PyTorch et le traitement d’images lourds.
+Ce service gère PyTorch et le traitement d’images.
 
 ```bash
 cd backend/DL_API
-
 # Installer les dépendances IA
 pip install -r requirements.txt
 ```
 
-> ⚠️ **Important**
-> Vérifiez que le fichier `best_model.pth` se trouve bien dans le dossier
-> `backend/DL_API/`.
+> ⚠️ Vérifiez que le fichier `best_model.pth` se trouve bien dans `backend/DL_API/` (au même niveau que `main.py`).
 
----
+### 2️⃣ Orchestrateur (uploads)
 
-### 2️⃣ Installation de l’Orchestrateur (Uploads)
-
-Ce service gère les requêtes du frontend et le stockage de fichiers.
+Ce service gère l'authentification, l'upload et la communication avec le service IA.
 
 ```bash
 cd backend/uploads
-
 # Installer les dépendances API
 pip install -r requirements.txt
 ```
 
----
-
-### 3️⃣ Installation du Frontend
-
-Interface utilisateur en React.
+### 3️⃣ Frontend
 
 ```bash
 cd frontend
-
-# Installer les dépendances Node
 npm install
 ```
 
 ---
 
-## ▶️ Démarrage du Projet
+## ▶️ Démarrage du projet
 
-⚠️ **Les 3 services doivent tourner simultanément.**
+⚠️ Les 3 services doivent tourner simultanément.
 
----
-
-### 🧠 Terminal 1 : Service IA (Port 8001)
+### 🧠 Terminal 1 : Service IA (port 8001)
 
 ```bash
 cd backend/DL_API
 uvicorn main:app --reload --port 8001
 ```
 
-*Attendre le message :*
-`Application startup complete`
+Attendre le message: `Application startup complete`.
 
----
-
-### 👮‍♂️ Terminal 2 : Orchestrateur (Port 8000)
+### 👮‍♂️ Terminal 2 : Orchestrateur (port 8000)
 
 ```bash
 cd backend/uploads
 uvicorn main:app --reload --port 8000
 ```
 
----
-
-### 💻 Terminal 3 : Frontend (Port 5173 ou 3000)
+### 💻 Terminal 3 : Frontend (port 5173 ou 3000)
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Ouvrez ensuite votre navigateur à l’URL affichée, par exemple :
-`http://localhost:5173`
+Ouvrez votre navigateur à l’URL affichée, par ex. `http://localhost:5173`.
 
 ---
 
-## ❓ Dépannage (Troubleshooting)
+## 🔐 Variables d’environnement utiles
 
-### ❌ Erreur CORS (Network Error)
+- `JWT_SECRET` (optionnel mais recommandé) : clé secrète JWT utilisée par `backend/uploads`. Exemple (PowerShell) :
 
-Si le frontend ne communique pas avec le backend :
+```powershell
+$Env:JWT_SECRET = "change_me_with_a_strong_secret"
+```
 
-1. Vérifiez le port du frontend (ex: `5173`)
-2. Ouvrez `backend/uploads/main.py`
-3. Ajoutez le port dans `origins` :
+La base SQLite `auth.db` est créée automatiquement dans `backend/uploads/` au premier lancement.
+
+---
+
+## 🌐 Points d’attention (CORS & accès aux images)
+
+- Si le frontend ne communique pas avec le backend, vérifiez la liste `origins` dans `backend/uploads/main.py` et ajoutez le port du frontend (`5173` ou `3000`).
+- Les images uploadées sont servies via `http://localhost:8000/images/<nom_fichier>`.
+
+Exemple de configuration CORS dans `backend/uploads/main.py` :
 
 ```python
 origins = [
     "http://localhost:3000",
-    "http://localhost:5173"
+    "http://localhost:5173",
 ]
 ```
 
 ---
 
-### ❌ Erreur : « Le modèle n'est pas chargé »
+## ❓ Dépannage
 
-1. Vérifiez le **Terminal IA**
-2. Assurez-vous que :
+### « Le modèle n'est pas chargé »
 
-    * le fichier s'appelle `best_model.pth`
-    * il est situé dans `backend/DL_API/`
-    * il est au même niveau que `main.py`
+1. Vérifiez le terminal du service IA.
+2. Confirmez que `best_model.pth` est bien dans `backend/DL_API/` (même niveau que `main.py`).
 
----
+### `npm error enoent`
 
-### ❌ Erreur `npm error enoent`
-
-Vous n’êtes pas dans le bon dossier.
+Vous n’êtes probablement pas dans le bon dossier.
 
 ```bash
 cd frontend
