@@ -3,10 +3,13 @@ import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react
 import ImageUploader from './components/ImageUploader.jsx';
 import Login from './components/Login.jsx';
 import Signup from './components/Signup.jsx';
-import Home from './components/Home.jsx'; // ⚠️ Assure-toi d'avoir importé Home
-import { Activity, LogOut, Clock, User, Home as HomeIcon, Eye } from 'lucide-react';
+import Home from './components/Home.jsx';
+import { Activity, LogOut, Clock, User, Home as HomeIcon, LayoutDashboard } from 'lucide-react'; // ✅ Import LayoutDashboard
 import './App.css';
 import History from './components/History.jsx';
+import ChatBot from './components/ChatBot';
+import Dashboard from './components/Dashboard';
+import ReportEditor from './components/ReportEditor';
 
 
 // 1. Composant pour protéger les routes
@@ -75,8 +78,9 @@ function NavBar() {
                         </>
                     ) : (
                         <>
-                            {/* Si connecté, on affiche le lien vers l'App */}
-                            <NavLink to="/app" icon={Eye}>Analyse</NavLink>
+                            {/* ✅ CHANGEMENT ICI : Analyse supprimé, Dashboard ajouté */}
+                            <NavLink to="/dashboard" icon={LayoutDashboard}>Tableau de bord</NavLink>
+
                             <NavLink to="/history" icon={Clock}>Historique</NavLink>
 
                             <div className="w-px h-6 bg-slate-200 mx-2"></div>
@@ -100,8 +104,6 @@ function AppContent() {
     return (
         <>
             <NavBar />
-            {/* J'ai enlevé le padding-top global (pt-32) car la Home page gère son propre design */}
-            {/* On applique un style spécifique seulement pour les routes qui ne sont pas "/" si besoin */}
             <main className="min-h-screen bg-slate-50 selection:bg-blue-100 selection:text-blue-900">
                 <Routes>
                     {/* Route Publique : Accueil */}
@@ -110,12 +112,13 @@ function AppContent() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
 
-                    {/* Route Protégée : L'Application réelle */}
+                    {/* Route Protégée : L'Application réelle (Analyse) */}
+                    {/* On garde la route accessible, même si le bouton n'est plus dans le menu (accessible via le Dashboard) */}
                     <Route
                         path="/app"
                         element={
                             <PrivateRoute>
-                                <div className="pt-32 px-4 pb-10"> {/* Padding ajouté ici pour éviter que la navbar cache l'uploader */}
+                                <div className="pt-32 px-4 pb-10">
                                     <ImageUploader />
                                 </div>
                             </PrivateRoute>
@@ -127,13 +130,36 @@ function AppContent() {
                         element={
                             <PrivateRoute>
                                 <div className="pt-32 px-4 pb-10">
-                                    <History /> {/* 3. ROUTE AJOUTÉE */}
+                                    <History />
+                                </div>
+                            </PrivateRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <PrivateRoute>
+                                <div className="pt-32 px-4 pb-10">
+                                    <Dashboard />
+                                </div>
+                            </PrivateRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/report-editor"
+                        element={
+                            <PrivateRoute>
+                                <div className="pt-20 px-4 pb-10">
+                                    <ReportEditor />
                                 </div>
                             </PrivateRoute>
                         }
                     />
                 </Routes>
             </main>
+            <ChatBot />
         </>
     )
 }

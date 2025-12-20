@@ -33,7 +33,7 @@ export default function Login() {
             if (!data.access_token) throw new Error('Jeton non reçu');
 
             localStorage.setItem('token', data.access_token);
-            window.location.href = '/app';
+            window.location.href = '/dashboard';
         } catch (err) {
             setError(err.message);
         } finally {
