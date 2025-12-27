@@ -1,11 +1,25 @@
 import React, { useRef, Suspense, Component } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
+import { useTranslation } from 'react-i18next'; // ✅ Import du hook
 import * as THREE from 'three';
 import { AlertTriangle } from 'lucide-react';
 
+// 0. COMPOSANT D'AFFICHAGE D'ERREUR (Fonctionnel pour utiliser le hook de traduction)
+const ErrorDisplay = () => {
+    const { t } = useTranslation();
+    return (
+        <Html center>
+            <div className="flex flex-col items-center justify-center text-red-500 bg-white p-4 rounded-lg shadow-xl border border-red-100 w-64 text-center">
+                <AlertTriangle size={24} className="mb-2" />
+                <p className="text-xs font-bold">{t('viewer.error_title')}</p> {/* ✅ Traduit */}
+                <p className="text-[10px] text-slate-500 mt-1">{t('viewer.error_desc')}</p> {/* ✅ Traduit */}
+            </div>
+        </Html>
+    );
+};
+
 // 1. COMPOSANT DE SÉCURITÉ (Error Boundary)
-// Si une erreur survient dans la 3D, ce composant l'attrape et affiche un message au lieu de l'écran blanc.
 class ErrorBoundary extends Component {
     constructor(props) {
         super(props);
@@ -22,15 +36,8 @@ class ErrorBoundary extends Component {
 
     render() {
         if (this.state.hasError) {
-            return (
-                <Html center>
-                    <div className="flex flex-col items-center justify-center text-red-500 bg-white p-4 rounded-lg shadow-xl border border-red-100 w-64 text-center">
-                        <AlertTriangle size={24} className="mb-2" />
-                        <p className="text-xs font-bold">Impossible de charger la 3D</p>
-                        <p className="text-[10px] text-slate-500 mt-1">Problème de sécurité (CORS) ou image inaccessible.</p>
-                    </div>
-                </Html>
-            );
+            // ✅ On appelle le composant fonctionnel qui gère la traduction
+            return <ErrorDisplay />;
         }
         return this.props.children;
     }
@@ -59,27 +66,32 @@ const EyeMesh = ({ imageUrl }) => {
 };
 
 // 3. LOADER (Pendant le chargement)
-const Loader = () => (
-    <Html center>
-        <div className="text-white text-xs bg-slate-800 px-3 py-1 rounded-full animate-pulse">
-            Chargement du relief...
-        </div>
-    </Html>
-);
+const Loader = () => {
+    const { t } = useTranslation(); // ✅ Hook ajouté ici
+    return (
+        <Html center>
+            <div className="text-white text-xs bg-slate-800 px-3 py-1 rounded-full animate-pulse">
+                {t('viewer.loading')} {/* ✅ Traduit */}
+            </div>
+        </Html>
+    );
+};
 
 // 4. COMPOSANT PRINCIPAL
 export default function Fundus3DViewer({ imageUrl }) {
+    const { t } = useTranslation(); // ✅ Hook ajouté ici
+
     // Sécurité : Si pas d'image, on ne rend rien
     if (!imageUrl) return (
         <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 text-sm">
-            Pas d'image disponible
+            {t('viewer.no_image')} {/* ✅ Traduit */}
         </div>
     );
 
     return (
         <div className="w-full h-full min-h-[300px] bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 relative">
             <div className="absolute top-4 left-4 z-10 bg-slate-800/80 text-white px-3 py-1 rounded-full text-xs font-medium backdrop-blur">
-                Topographie 3D
+                {t('viewer.badge')} {/* ✅ Traduit */}
             </div>
 
             <Canvas camera={{ position: [0, 5, 5], fov: 45 }}>

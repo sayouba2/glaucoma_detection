@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { MessageSquare, X, Send, Loader2, Bot, HelpCircle } from 'lucide-react'; // J'ai remplacé Bot par HelpCircle pour différencier
+import { useTranslation } from 'react-i18next'; // ✅ Import du hook
+import { MessageSquare, X, Send, Loader2, Bot, HelpCircle } from 'lucide-react';
 
 // ✅ On pointe vers la nouvelle route
 const API_URL = 'http://localhost:8000/chat/guide';
 
 const ChatBot = () => {
+    // ✅ CORRECTION 1 : On récupère 'i18n' pour connaître la langue actuelle
+    const { t, i18n } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
-    // ✅ Message d'accueil orienté "Aide"
+
+    // ✅ Message d'accueil traduit
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: 'Bonjour Docteur. Je suis votre guide. Une question sur le fonctionnement de l\'application ? (ex: "Comment créer un patient ?")' }
+        { role: 'assistant', content: t('chat.guide_welcome') }
     ]);
+
     const [inputText, setInputText] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
@@ -35,7 +40,6 @@ const ChatBot = () => {
         const formData = new FormData();
         formData.append('message', inputText);
         formData.append('history', JSON.stringify(historyClean));
-        // ❌ Plus d'envoi de fichier ici, c'est juste du support textuel
 
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
@@ -43,6 +47,10 @@ const ChatBot = () => {
             const response = await fetch(API_URL, {
                 method: 'POST',
                 body: formData,
+                // ✅ CORRECTION 2 : On force l'envoi de la langue au Backend
+                headers: {
+                    'Accept-Language': i18n.language
+                }
             });
 
             if (!response.body) throw new Error("Pas de réponse");
@@ -65,7 +73,8 @@ const ChatBot = () => {
         } catch (err) {
             setMessages(prev => {
                 const newMsgs = [...prev];
-                newMsgs[newMsgs.length - 1].content = "⚠️ Je rencontre un problème technique.";
+                // ✅ Message d'erreur traduit
+                newMsgs[newMsgs.length - 1].content = t('chat.error_generic');
                 return newMsgs;
             });
         } finally {
@@ -86,8 +95,8 @@ const ChatBot = () => {
                                 <HelpCircle size={20} />
                             </div>
                             <div>
-                                <span className="font-bold block text-sm">Guide d'utilisation</span>
-                                <span className="text-xs text-slate-300">Support GlaucomaAI</span>
+                                <span className="font-bold block text-sm">{t('chat.guide_name')}</span> {/* ✅ Traduit */}
+                                <span className="text-xs text-slate-300">{t('chat.guide_subtitle')}</span> {/* ✅ Traduit */}
                             </div>
                         </div>
                         <button onClick={() => setIsOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors">
@@ -130,7 +139,7 @@ const ChatBot = () => {
                             type="text"
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}
-                            placeholder="Comment faire pour..."
+                            placeholder={t('chat.guide_placeholder')} // ✅ Traduit
                             className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2.5 text-sm focus:ring-2 focus:ring-slate-500 outline-none transition-all placeholder:text-slate-400"
                         />
                         <button
@@ -149,7 +158,7 @@ const ChatBot = () => {
                 onClick={() => setIsOpen(!isOpen)}
                 className={`${isOpen ? 'bg-red-500 rotate-90' : 'bg-slate-800 hover:bg-slate-900'} 
         text-white p-4 rounded-full shadow-xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center`}
-                title="Aide & Support"
+                title={t('chat.help_tooltip')} // ✅ Traduit
             >
                 {isOpen ? <X size={24} /> : <HelpCircle size={24} />}
             </button>

@@ -1,35 +1,17 @@
-import React, { useState, useEffect } from 'react'; // ✅ Ajout useEffect
-import axios from 'axios'; // ✅ Ajout axios
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import api from '../utils/api';
+import { useTranslation } from 'react-i18next'; // ✅ Import du hook
 import { Upload, Info, Activity, FileText, RefreshCw, AlertTriangle, CheckCircle, Loader2, Users } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Fundus3DViewer from './Fundus3DViewer';
 import DoctorChat from './DoctorChat';
-import { useNavigate } from 'react-router-dom';
 
-const API_URL_BASE = 'http://localhost:8000'; // ✅ Définition de la base URL
+const API_URL_BASE = 'http://localhost:8000';
 const API_URL = `${API_URL_BASE}/uploadfile/`;
 
-// Fonction utilitaire pour le PDF
-/*const getImageData = (url) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.setAttribute('crossOrigin', 'anonymous');
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg'));
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-};
-*/
-
 const GlaucomaDetectionApp = () => {
+  const { t } = useTranslation(); // ✅ Initialisation du hook
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
@@ -38,11 +20,10 @@ const GlaucomaDetectionApp = () => {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const location = useLocation();
-  // États pour les patients
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const navigate = useNavigate();
-  // 1. Charger les patients au démarrage
+
   useEffect(() => {
     fetchPatients();
   }, []);
@@ -55,25 +36,21 @@ const GlaucomaDetectionApp = () => {
       });
       setPatients(res.data);
     } catch (e) {
-      console.error("Erreur chargement patients", e); // ✅ Utilisation de 'e'
+      console.error("Erreur chargement patients", e);
     }
   };
 
   useEffect(() => {
     if (location.state && location.state.replayAnalysis) {
-      // On charge les données envoyées par l'historique
       const { imageUrl, analysisData } = location.state;
-
       setPreviewUrl(imageUrl);
       setAnalysisResult(analysisData);
-
-      // On "nettoie" l'état pour que si on rafraichit la page, on ne recharge pas ça en boucle
       window.history.replaceState({}, document.title);
     }
   }, [location]);
+
   const MAX_SIZE_MB = 5;
 
-  // --- LOGIQUE DE GESTION ---
   const handleDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
   const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
   const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
@@ -81,11 +58,13 @@ const GlaucomaDetectionApp = () => {
   const handleFile = (file) => {
     setError(''); setAnalysisResult(null);
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setError(`L'image est trop lourde. Maximum autorisé: ${MAX_SIZE_MB} Mo.`);
+      // ✅ Erreur avec variable (5 Mo)
+      setError(t('upload.error_size', { max: MAX_SIZE_MB }));
       setSelectedFile(null); setPreviewUrl(''); return;
     }
     if (!file.type.match('image.*')) {
-      setError('Veuillez sélectionner un fichier image valide.'); return;
+      setError(t('upload.error_type')); // ✅ Traduit
+      return;
     }
     setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file));
   };
@@ -99,28 +78,26 @@ const GlaucomaDetectionApp = () => {
   const handleFileChange = (event) => { const file = event.target.files[0]; if (file) handleFile(file); };
 
   const handleFileUpload = async () => {
-    if (!selectedFile) { setError("Veuillez choisir une image d'abord."); return; }
+    if (!selectedFile) { setError(t('upload.error_file')); return; } // ✅ Traduit
 
-    // ❌ ERREUR AVANT : if (!selectedPatientId) ...
-    // ✅ CORRECTION : On vérifie l'objet selectedPatient
-    if (!selectedPatient) { setError("Veuillez sélectionner un patient pour ce dossier."); return; }
+    if (!selectedPatient) { setError(t('upload.error_patient_select')); return; } // ✅ Traduit
 
     const token = localStorage.getItem('token');
     if (!token) {
-      const go = window.confirm("Vous devez être connecté pour lancer l'analyse. Voulez-vous vous connecter maintenant ?");
+      // ✅ Alerte confirm traduite
+      const go = window.confirm(t('upload.login_confirm'));
       if (go) window.location.href = '/login';
       return;
     }
 
     const formData = new FormData();
     formData.append('file', selectedFile);
-
-    // ❌ ERREUR AVANT : formData.append('patient_id', selectedPatientId);
-    // ✅ CORRECTION : On envoie l'ID contenu dans l'objet patient
     formData.append('patient_id', selectedPatient.id);
 
     try {
-      setIsAnalyzing(true); setError(''); setAnalysisResult(null); setUploadStatus('Analyse IA en cours...');
+      setIsAnalyzing(true); setError(''); setAnalysisResult(null);
+      setUploadStatus(t('upload.status_analyzing')); // ✅ Traduit
+
       const response = await api.post(API_URL, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       const data = response.data;
       const analysis = data.analysis;
@@ -129,41 +106,40 @@ const GlaucomaDetectionApp = () => {
       const isGlaucoma = analysis.prediction_class === 1;
       const confidencePercent = (analysis.probability * 100).toFixed(1);
 
+      // ✅ Recommandations traduites dynamiquement
       const dynamicRecommendations = isGlaucoma
-          ? ["Examen OCT requis", "Contrôle pression intraoculaire"]
-          : ["Fond d'œil normal", "Contrôle annuel recommandé", "Surveillance standard"];
+          ? [t('history.reco_oct'), t('upload.reco_pressure')]
+          : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')];
 
       const realResult = {
         confidence: confidencePercent,
         hasGlaucoma: isGlaucoma,
-        message: isGlaucoma ? "Signes de glaucome détectés" : "Rétine saine",
+        // ✅ Message traduit
+        message: isGlaucoma ? t('upload.msg_glaucoma') : t('upload.msg_healthy'),
         recommendations: dynamicRecommendations,
         gradcamImage: analysis.gradcam_image,
         prediction_class: analysis.prediction_class,
         probability: analysis.probability
       };
-      setAnalysisResult(realResult); setUploadStatus('Terminé');
+      setAnalysisResult(realResult);
+      setUploadStatus(t('upload.status_done')); // ✅ Traduit
     } catch (err) {
       console.error(err);
-      setError("Erreur lors de l'analyse.");
+      setError(t('upload.error_generic')); // ✅ Traduit
       setUploadStatus('');
     } finally { setIsAnalyzing(false); }
   };
 
   const handleOpenReportEditor = () => {
     if (!analysisResult) return;
-
-    // On récupère le nom du médecin depuis le dashboard (ou une autre source, sinon "Médecin")
-    // Pour faire simple, on passe les données disponibles
     navigate('/report-editor', {
       state: {
         patientName: selectedPatient?.full_name,
         patientAge: selectedPatient?.age,
-        analysisData: analysisResult, // Indispensable pour l'éditeur
-        imageUrl: previewUrl,         // Indispensable pour l'image
+        analysisData: analysisResult,
+        imageUrl: previewUrl,
         patientGender: selectedPatient?.gender,
-        patientId: selectedPatient?.id, // Tu devras peut-être récupérer l'info complète du patient ici si tu veux son nom
-        // Astuce : Quand tu sélectionnes le patient dans le <select>, stocke l'objet patient entier, pas juste l'ID
+        patientId: selectedPatient?.id,
       }
     });
   };
@@ -176,33 +152,32 @@ const GlaucomaDetectionApp = () => {
         {/* HEADER DE L'APP */}
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 mb-6">
 
-          {/* --- PARTIE 1 : UPLOAD (Visible tant qu'il n'y a pas de résultat) --- */}
+          {/* --- PARTIE 1 : UPLOAD --- */}
           {!analysisResult ? (
               <>
                 <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-10 text-center text-white relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                  <h1 className="text-3xl font-bold mb-2 relative z-10">Centre d'Analyse Rétinienne</h1>
-                  <p className="text-slate-300 relative z-10">Interface Médecin • Deep Learning • Assistance 3D</p>
+                  <h1 className="text-3xl font-bold mb-2 relative z-10">{t('upload.title')}</h1> {/* ✅ Traduit */}
+                  <p className="text-slate-300 relative z-10">{t('upload.subtitle')}</p> {/* ✅ Traduit */}
                 </div>
 
                 <div className="p-10">
 
-                  {/* ✅ SÉLECTION DU PATIENT (C'était manquant dans ton code, d'où les erreurs) */}
+                  {/* SÉLECTION DU PATIENT */}
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6 max-w-xl mx-auto">
                     <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                      <Users size={16} className="text-blue-600"/> 1. Sélectionner le Patient
+                      <Users size={16} className="text-blue-600"/> {t('upload.select_patient')} {/* ✅ Traduit */}
                     </h3>
                     <select
-                        // ✅ AJOUT : Pour que le select reflète l'état React
                         value={selectedPatient ? selectedPatient.id : ""}
                         onChange={(e) => {
                           const p = patients.find(pat => pat.id === parseInt(e.target.value));
                           setSelectedPatient(p);
                         }}
                     >
-                      <option value="">-- Choisir un dossier patient --</option>
+                      <option value="">{t('upload.choose_placeholder')}</option> {/* ✅ Traduit */}
                       {patients.map(p => (
-                          <option key={p.id} value={p.id}>{p.full_name} ({p.age} ans)</option>
+                          <option key={p.id} value={p.id}>{p.full_name} ({p.age} {t('common.years')})</option>
                       ))}
                     </select>
                   </div>
@@ -222,8 +197,8 @@ const GlaucomaDetectionApp = () => {
                           <div className="p-4 bg-slate-100 text-slate-600 rounded-full mb-4 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
                             <Upload size={32} />
                           </div>
-                          <h3 className="text-lg font-semibold text-slate-700">Déposez l'image du fond d'œil</h3>
-                          <p className="text-slate-400 text-sm mt-1">ou cliquez pour parcourir (JPG, PNG)</p>
+                          <h3 className="text-lg font-semibold text-slate-700">{t('upload.drop_title')}</h3> {/* ✅ Traduit */}
+                          <p className="text-slate-400 text-sm mt-1">{t('upload.drop_subtitle')}</p> {/* ✅ Traduit */}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center relative z-10">
@@ -252,11 +227,11 @@ const GlaucomaDetectionApp = () => {
                         }
                         `}
                     >
-                      {isAnalyzing ? <><Loader2 className="animate-spin" size={20}/> Traitement...</> : <><Activity size={20}/> Lancer Diagnostic</>}
+                      {isAnalyzing ? <><Loader2 className="animate-spin" size={20}/> {t('upload.btn_processing')}</> : <><Activity size={20}/> {t('upload.btn_analyze')}</>} {/* ✅ Traduits */}
                     </button>
                   </div>
 
-                  {/* ✅ Affichage du status (Corrige l'erreur uploadStatus unused) */}
+                  {/* Status */}
                   {uploadStatus && !error && (
                       <div className="mt-4 text-center text-blue-600 font-medium animate-pulse">{uploadStatus}</div>
                   )}
@@ -264,45 +239,42 @@ const GlaucomaDetectionApp = () => {
                 </div>
 
                 <div className="bg-blue-50 p-4 border-t border-blue-100 flex justify-center items-center gap-2 text-blue-700 text-sm">
-                  <Info size={16} /> Mode sécurisé pour professionnels de santé
+                  <Info size={16} /> {t('upload.secure_mode')} {/* ✅ Traduit */}
                 </div>
               </>
           ) : (
 
-              /* --- PARTIE 2 : INTERFACE IA & RÉSULTATS (Split Screen Pro) --- */
+              /* --- PARTIE 2 : RÉSULTATS --- */
               <div className="bg-slate-50 min-h-screen flex flex-col">
 
                 {/* Header Resultats */}
                 <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                     <Activity className="text-blue-600"/>
-                    Résultat de l'analyse
+                    {t('upload.result_title')} {/* ✅ Traduit */}
                   </h2>
                   <button onClick={handleReset} className="text-sm font-medium text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
-                    <RefreshCw size={16}/> Nouvelle image
+                    <RefreshCw size={16}/> {t('upload.new_image')} {/* ✅ Traduit */}
                   </button>
                 </div>
 
-                {/* CONTAINER PRINCIPAL : Hauteur fixée pour permettre le scroll indépendant */}
-                {/* On calcule la hauteur totale moins le header (environ 140px navbar + header) */}
                 <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] overflow-hidden">
 
-                  {/* --- COLONNE GAUCHE : VISUEL & DONNÉES (Scrollable indépendamment) --- */}
+                  {/* --- COLONNE GAUCHE --- */}
                   <div className="w-full lg:w-1/2 h-full overflow-y-auto p-6 border-r border-slate-200 bg-slate-50 scrollbar-thin scrollbar-thumb-slate-300">
                     <div className="flex flex-col gap-6">
 
-                      {/* Visualiseur 3D (Taille fixe pour éviter qu'il ne grandisse trop) */}
+                      {/* Visualiseur 3D */}
                       <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-200 relative shrink-0">
                         <div className="absolute top-4 left-4 z-10 bg-slate-800/80 text-white px-3 py-1 rounded-full text-xs font-medium backdrop-blur">
-                          Topographie Rétinienne 3D
+                          {t('upload.badge_3d')} {/* ✅ Traduit */}
                         </div>
-                        {/* On force une hauteur fixe pour le viewer pour éviter qu'il disparaisse ou s'étire */}
                         <div className="h-[400px] w-full rounded-xl overflow-hidden bg-slate-900">
                           <Fundus3DViewer imageUrl={previewUrl} />
                         </div>
                       </div>
 
-                      {/* Carte de Résultat Rapide */}
+                      {/* Carte de Résultat */}
                       <div className={`p-6 rounded-2xl border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 ${analysisResult.hasGlaucoma ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
                         <div className="flex items-center gap-4">
                           {analysisResult.hasGlaucoma
@@ -311,25 +283,30 @@ const GlaucomaDetectionApp = () => {
                           }
                           <div>
                             <h3 className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
-                              {analysisResult.hasGlaucoma ? 'Glaucome Détecté' : 'Rétine Saine'}
+                              {/* ✅ Traduction dynamique */}
+                              {analysisResult.hasGlaucoma ? t('upload.glaucoma_detected') : t('upload.healthy_retina')}
                             </h3>
-                            <p className="text-slate-600 text-sm">Confiance IA : <strong>{analysisResult.confidence}%</strong></p>
+                            <p className="text-slate-600 text-sm">{t('upload.confidence')} : <strong>{analysisResult.confidence}%</strong></p> {/* ✅ Traduit */}
                           </div>
                         </div>
                         <button
                             onClick={handleOpenReportEditor}
                             className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 p-3 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="Télécharger Rapport PDF"
+                            title={t('upload.download_tooltip')} // ✅ Traduit
                         >
                           <FileText size={24} />
                         </button>
                       </div>
 
-                      {/* Tu peux ajouter d'autres infos ici (ex: Recommandations statiques) */}
+                      {/* Recommandations */}
                       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Recommandations Standards</h3>
+                        <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">{t('upload.recommendations')}</h3> {/* ✅ Traduit */}
                         <ul className="space-y-2">
-                          {analysisResult.recommendations.map((rec, i) => (
+                          {/* ✅ CORRECTION : On recalcule les recommandations ici, à chaque affichage */}
+                          {(analysisResult.hasGlaucoma
+                                  ? [t('history.reco_oct'), t('upload.reco_pressure')]
+                                  : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')]
+                          ).map((rec, i) => (
                               <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
                                 <span className="text-blue-500 mt-1">•</span> {rec}
                               </li>
@@ -339,8 +316,7 @@ const GlaucomaDetectionApp = () => {
                     </div>
                   </div>
 
-                  {/* --- COLONNE DROITE : ASSISTANT MÉDICAL (Chat) --- */}
-                  {/* Prend tout l'espace restant, pas de scroll sur le container principal, le scroll est DANS DoctorChat */}
+                  {/* --- COLONNE DROITE : CHAT --- */}
                   <div className="w-full lg:w-1/2 h-full bg-white flex flex-col">
                     <DoctorChat
                         analysisResult={analysisResult}

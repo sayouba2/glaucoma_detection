@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom'; // ✅ Pour la redirection
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next'; // ✅ Import du hook
 import { Clock, AlertTriangle, CheckCircle, ImageOff, Calendar, FileText, Eye, User } from 'lucide-react';
 import { generateGlaucomaReport } from '../utils/pdfGenerator';
 
 const API_URL = 'http://localhost:8000';
 
 const History = () => {
+    const { t } = useTranslation(); // ✅ Initialisation du hook
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const navigate = useNavigate(); // ✅ Hook de navigation
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchHistory();
@@ -29,7 +31,7 @@ const History = () => {
             setHistory(response.data);
         } catch (err) {
             console.error(err);
-            setError("Impossible de charger l'historique.");
+            setError(t('history.error_load')); // ✅ Erreur traduite
         } finally {
             setLoading(false);
         }
@@ -37,7 +39,8 @@ const History = () => {
 
     // ✅ LOGIQUE DE REGROUPEMENT PAR PATIENT
     const groupedHistory = history.reduce((acc, item) => {
-        const patientName = item.patient_name || 'Patient Inconnu';
+        // ✅ Traduction du patient inconnu
+        const patientName = item.patient_name || t('history.unknown_patient');
         if (!acc[patientName]) {
             acc[patientName] = [];
         }
@@ -52,7 +55,9 @@ const History = () => {
             confidence: item.confidence,
             timestamp: item.timestamp
         };
-        await generateGlaucomaReport(reportData, item.image_url);
+        // Note: generateGlaucomaReport devra aussi recevoir 't' idéalement,
+        // mais ici on garde ta structure actuelle.
+        await generateGlaucomaReport(reportData, item.image_url, t);
     };
 
     // ✅ NOUVELLE FONCTION : Rediriger vers l'interface de résultat
@@ -63,12 +68,13 @@ const History = () => {
             hasGlaucoma: item.has_glaucoma,
             prediction_class: item.has_glaucoma ? 1 : 0,
             probability: item.confidence,
-            message: item.has_glaucoma ? "Signes de glaucome détectés (Historique)" : "Rétine saine (Historique)",
-            // On remet des recommandations par défaut si l'API historique ne les stocke pas toutes
+            // ✅ Messages traduits dynamiquement
+            message: item.has_glaucoma ? t('history.msg_glaucoma') : t('history.msg_healthy'),
+            // ✅ Recommandations traduites dynamiquement
             recommendations: item.has_glaucoma
-                ? ["Consulter un ophtalmologue", "Examen OCT requis"]
-                : ["Contrôle annuel recommandé"],
-            gradcamImage: null // L'historique ne stocke pas toujours le gradcam, on met null ou on gère
+                ? [t('history.reco_consult'), t('history.reco_oct')]
+                : [t('history.reco_annual')],
+            gradcamImage: null
         };
 
         // On navigue vers /app en passant les données via le "state" du router
@@ -81,7 +87,7 @@ const History = () => {
         });
     };
 
-    if (loading) return <div className="text-center mt-20 text-slate-500">Chargement de vos dossiers...</div>;
+    if (loading) return <div className="text-center mt-20 text-slate-500">{t('history.loading_records')}</div>; // ✅ Traduit
 
     return (
         <div className="max-w-7xl mx-auto p-6 animate-in fade-in">
@@ -90,8 +96,8 @@ const History = () => {
                     <Clock size={32} />
                 </div>
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-800">Dossiers Médicaux</h2>
-                    <p className="text-slate-500">Historique des analyses classé par patient.</p>
+                    <h2 className="text-3xl font-bold text-slate-800">{t('history.title')}</h2> {/* ✅ Traduit */}
+                    <p className="text-slate-500">{t('history.subtitle')}</p> {/* ✅ Traduit */}
                 </div>
             </div>
 
@@ -99,7 +105,7 @@ const History = () => {
 
             {Object.keys(groupedHistory).length === 0 ? (
                 <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">
-                    Aucun historique disponible.
+                    {t('history.empty')} {/* ✅ Traduit */}
                 </div>
             ) : (
                 <div className="space-y-12">
@@ -114,7 +120,7 @@ const History = () => {
                                 </div>
                                 <h3 className="text-xl font-bold text-slate-800">{patientName}</h3>
                                 <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
-                                    {items.length} analyse{items.length > 1 ? 's' : ''}
+                                    {items.length} {t('history.analysis_unit')}{items.length > 1 ? 's' : ''} {/* ✅ Traduit */}
                                 </span>
                             </div>
 
@@ -128,7 +134,7 @@ const History = () => {
                                             {item.is_expired ? (
                                                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">
                                                     <ImageOff size={24} />
-                                                    <span className="text-xs">Expirée</span>
+                                                    <span className="text-xs">{t('history.expired')}</span> {/* ✅ Traduit */}
                                                 </div>
                                             ) : (
                                                 <>
@@ -139,7 +145,7 @@ const History = () => {
                                                             onClick={() => handleViewAnalysis(item)}
                                                             className="bg-white text-blue-600 px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform"
                                                         >
-                                                            <Eye size={16}/> Voir en détail
+                                                            <Eye size={16}/> {t('history.view_details')} {/* ✅ Traduit */}
                                                         </button>
                                                     </div>
                                                 </>
@@ -156,8 +162,8 @@ const History = () => {
                                                     <Calendar size={12} /> {new Date(item.timestamp).toLocaleDateString()}
                                                 </p>
                                                 {item.has_glaucoma
-                                                    ? <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md flex gap-1 items-center"><AlertTriangle size={12}/> Glaucome</span>
-                                                    : <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md flex gap-1 items-center"><CheckCircle size={12}/> Sain</span>
+                                                    ? <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md flex gap-1 items-center"><AlertTriangle size={12}/> {t('history.badge_glaucoma')}</span> // ✅ Traduit
+                                                    : <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md flex gap-1 items-center"><CheckCircle size={12}/> {t('history.badge_healthy')}</span> // ✅ Traduit
                                                 }
                                             </div>
 
@@ -167,13 +173,13 @@ const History = () => {
                                                     disabled={item.is_expired}
                                                     className="flex-1 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-1"
                                                 >
-                                                    <Eye size={14}/> Visualiser
+                                                    <Eye size={14}/> {t('history.view_btn')} {/* ✅ Traduit */}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDownload(item)}
                                                     className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors flex justify-center items-center gap-1"
                                                 >
-                                                    <FileText size={14}/> PDF
+                                                    <FileText size={14}/> {t('history.pdf_btn')} {/* ✅ Traduit */}
                                                 </button>
                                             </div>
                                         </div>
