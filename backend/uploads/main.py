@@ -3,13 +3,14 @@ import os
 import shutil
 import asyncio
 import json
+import io
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional, List
 
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status, Form, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -20,16 +21,24 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, ForeignKey, create_engine, select, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
+from dotenv import load_dotenv
 
-# ✅ IMPORT DU NETTOYEUR
+# ✅ IMPORT DU NETTOYEUR ET SÉCURITÉ
 from cleanup import start_cleanup_loop
 from openai import OpenAI
+from security_service_local import SecurityService
+
+# Charger les variables d'environnement
+load_dotenv()
+
+# Initialiser le service de sécurité
+security_service = SecurityService()
 
 # --- Configuration ---
 SECRET_KEY = os.getenv("JWT_SECRET", "CHANGE_THIS_TO_A_STRONG_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-TTL_MINUTES = 4320
+TTL_MINUTES = 1440  # 24 heures au lieu de 3 jours
 
 # Utilise une variable d'environnement pour la clé OpenAI, ou mets-la ici si test local
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -237,6 +246,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants invalides")
+    
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -282,6 +292,10 @@ async def chat_with_doctor(
                 current_image_context = f"[NOUVELLE IMAGE ANALYSÉE]\nStatut: {status}\nConfiance: {confiance}\n"
         except Exception as e:
             current_image_context = f"[ERREUR] Impossible d'analyser l'image : {str(e)}"
+        finally:
+            # Nettoyage du fichier temporaire du chat
+            if os.path.exists(file_location):
+                os.remove(file_location)
 
     # 2. CONSTRUCTION DU CONTEXTE FINAL
     # On privilégie l'image qu'on vient d'uploader, sinon on prend le contexte envoyé par le front
@@ -303,14 +317,36 @@ async def chat_with_doctor(
     # 4. GÉNÉRATEUR DE STREAM
     async def generate_response():
         try:
-            stream = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=gpt_messages,
-                stream=True,
-            )
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+            # Réponse simulée pour la démonstration (sans OpenAI)
+            demo_response = """
+Analyse de l'image de fond d'œil :
+
+**Diagnostic IA :** Glaucome détecté avec une confiance de 98.5%
+
+**Observations cliniques :**
+- Excavation papillaire importante
+- Rapport cup/disc élevé (>0.7)
+- Amincissement de l'anneau neuro-rétinien
+- Signes compatibles avec une neuropathie optique glaucomateuse
+
+**Recommandations :**
+1. Confirmation par examen clinique approfondi
+2. Mesure de la pression intraoculaire
+3. Champ visuel automatisé
+4. OCT du nerf optique et des fibres nerveuses
+5. Suivi ophtalmologique rapproché
+
+**Note :** Cette analyse IA est un outil d'aide au diagnostic et ne remplace pas l'expertise médicale.
+            """
+            
+            # Simuler un streaming progressif
+            words = demo_response.split()
+            for i, word in enumerate(words):
+                yield word + " "
+                if i % 5 == 0:  # Pause tous les 5 mots
+                    import asyncio
+                    await asyncio.sleep(0.1)
+                    
         except Exception as e:
             yield f"Erreur de génération : {str(e)}"
 
@@ -340,11 +376,21 @@ def get_patient_details(patient_id: int, current_user: User = Depends(get_curren
     for ana in sorted_analyses:
         file_path = os.path.join(UPLOAD_DIRECTORY, ana.filename)
         exists = os.path.exists(file_path)
-        image_url = f"http://localhost:8000/images/{ana.filename}" if exists else None
+        
+        # Gestion des fichiers chiffrés
+        if exists and ana.filename.endswith('.encrypted'):
+            image_url = f"http://localhost:8000/secure-image/{ana.filename}"
+            display_filename = ana.filename.replace('.encrypted', '')
+        elif exists:
+            image_url = f"http://localhost:8000/images/{ana.filename}"
+            display_filename = ana.filename
+        else:
+            image_url = None
+            display_filename = ana.filename.replace('.encrypted', '') if ana.filename.endswith('.encrypted') else ana.filename
 
         analyses_formatted.append({
             "id": ana.id,
-            "filename": ana.filename,
+            "filename": display_filename,
             "has_glaucoma": ana.has_glaucoma,
             "confidence": ana.confidence,
             "timestamp": ana.timestamp,
@@ -375,6 +421,7 @@ def create_patient(patient: PatientCreate, current_user: User = Depends(get_curr
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
+    
     return {"message": "Patient enregistré", "patient": new_patient}
 
 
@@ -385,7 +432,7 @@ async def create_upload_file(
         file: UploadFile = File(...),
         patient_id: int = Form(...),
         current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db) # ✅ Utilisation de Depends(get_db)
+        db: Session = Depends(get_db)
 ):
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Fichier invalide.")
@@ -395,30 +442,55 @@ async def create_upload_file(
     file_location = os.path.join(UPLOAD_DIRECTORY, clean_filename)
 
     try:
+        # 1. Sauvegarde temporaire
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        
+        # 2. Chiffrement sécurisé
+        encrypted_path = security_service.secure_file_upload(
+            file_location, 
+            current_user.email, 
+            current_user.id, 
+            patient_id
+        )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur sauvegarde: {e}")
+        if os.path.exists(file_location):
+            os.remove(file_location)
+        raise HTTPException(status_code=500, detail=f"Erreur sécurisation: {e}")
     finally:
         await file.close()
 
     analysis_result = {}
+    temp_file_for_analysis = None
+    
     try:
+        # 3. Déchiffrement temporaire pour analyse IA
+        temp_file_for_analysis = security_service.secure_file_access(
+            encrypted_path, 
+            current_user.email, 
+            current_user.id,
+            temp_access=True
+        )
+        
+        # 4. Analyse IA
         async with httpx.AsyncClient(timeout=60.0) as client:
-            with open(file_location, "rb") as f:
+            with open(temp_file_for_analysis, "rb") as f:
                 files = {'file': (clean_filename, f, file.content_type)}
                 response = await client.post(DL_SERVICE_URL, files=files)
 
             if response.status_code == 200:
                 analysis_result = response.json()
 
-                # On vérifie que le patient appartient bien au médecin
+                # Vérifier patient
                 patient = db.query(Patient).filter(Patient.id == patient_id, Patient.doctor_id == current_user.id).first()
                 if not patient:
                     raise HTTPException(status_code=404, detail="Patient introuvable")
 
+                # Sauvegarder avec nom chiffré
+                encrypted_filename = os.path.basename(encrypted_path)
                 new_analysis = Analysis(
-                    filename=clean_filename,
+                    filename=encrypted_filename,
                     has_glaucoma=bool(analysis_result.get("prediction_class") == 1),
                     confidence=float(analysis_result.get("probability", 0)),
                     user_id=current_user.id,
@@ -430,13 +502,16 @@ async def create_upload_file(
                 analysis_result = {"error": "Erreur DL", "details": response.text}
     except httpx.RequestError:
         analysis_result = {"error": "Service DL injoignable"}
+    finally:
+        # 5. Nettoyage fichier temporaire
+        if temp_file_for_analysis and os.path.exists(temp_file_for_analysis):
+            security_service.cleanup_temp_file(temp_file_for_analysis, current_user.email, current_user.id)
 
     return {
         "filename": clean_filename,
-        "message": "Analyse terminée",
+        "message": "Analyse terminée (fichier sécurisé)",
         "analysis": {
             **analysis_result,
-            # Sécurité si patient n'est pas trouvé (cas d'erreur avant)
             "patient_name": patient.full_name if 'patient' in locals() and patient else "Inconnu"
         }
     }
@@ -453,12 +528,25 @@ def get_user_history(current_user: User = Depends(get_current_user), db: Session
     for ana in analyses:
         file_path = os.path.join(UPLOAD_DIRECTORY, ana.filename)
         exists = os.path.exists(file_path)
-        image_url = f"http://localhost:8000/images/{ana.filename}" if exists else None
+        
+        # Pour les fichiers chiffrés, utiliser l'endpoint sécurisé
+        if exists and ana.filename.endswith('.encrypted'):
+            image_url = f"http://localhost:8000/secure-image/{ana.filename}"
+            # Nom d'affichage sans l'extension .encrypted
+            display_filename = ana.filename.replace('.encrypted', '')
+        elif exists:
+            # Fichiers non chiffrés (rétrocompatibilité)
+            image_url = f"http://localhost:8000/images/{ana.filename}"
+            display_filename = ana.filename
+        else:
+            image_url = None
+            display_filename = ana.filename.replace('.encrypted', '') if ana.filename.endswith('.encrypted') else ana.filename
+        
         pat_name = ana.patient.full_name if ana.patient else "Inconnu"
 
         history_data.append({
             "id": ana.id,
-            "filename": ana.filename,
+            "filename": display_filename,
             "has_glaucoma": ana.has_glaucoma,
             "confidence": ana.confidence,
             "timestamp": ana.timestamp,

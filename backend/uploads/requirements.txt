@@ -8,3 +8,5 @@ sqlalchemy
 openai
 email-validator
 aiofiles
+cryptography
+python-dotenv

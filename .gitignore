@@ -72,6 +72,21 @@ MANIFEST
 # ========== UPLOADS ==========
 backend/uploads/uploaded_images/
 
+# ========== SÉCURITÉ ==========
+# Fichiers chiffrés
+*.encrypted
+*.key
+
+# Logs d'audit
+logs/
+test_logs/
+backend/uploads/logs/
+backend/DL_API/logs/
+
+# Fichiers de configuration sensibles
+.env.production
+.env.staging
+
 # ========== ENVIRONNEMENT ==========
 .env
 .env.local
