@@ -8,7 +8,8 @@ export default function ReportEditor() {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { analysisData, imageUrl, patientName, patientId, doctorName, patientAge, patientGender } = location.state || {};
+    // ✅ Extraction de gradcamImage
+    const { analysisData, imageUrl, gradcamImage, patientName, patientId, doctorName, patientAge, patientGender } = location.state || {};
 
     // État du formulaire
     const [report, setReport] = useState({
@@ -52,7 +53,8 @@ export default function ReportEditor() {
             ...report,
             recommendations: report.recommendations.split('\n').filter(r => r.trim() !== '')
         };
-        await generateGlaucomaReport(formattedData, imageUrl, t);
+        // ✅ Passage de gradcamImage au générateur PDF
+        await generateGlaucomaReport(formattedData, imageUrl, gradcamImage, t);
     };
 
     if (!analysisData) return null;
@@ -149,10 +151,20 @@ export default function ReportEditor() {
 
                     {/* Zone Analyse */}
                     <div className="flex gap-8 items-start">
-                        <div className="w-48 h-48 bg-black rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-sm relative group">
-                            <img src={imageUrl} alt="Fundus" className="w-full h-full object-cover" />
-                            <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] p-1 text-center">{t('report.image_original')}</div>
+                        {/* ✅ Remplacement par le bloc flexible incluant GradCAM */}
+                        <div className="flex gap-6 items-start">
+                            <div className="w-48 h-48 bg-black rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-sm relative">
+                                <img src={imageUrl} alt="Fundus" className="w-full h-full object-cover" />
+                                <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] p-1 text-center">{t('report.image_original')}</div>
+                            </div>
+                            {gradcamImage && (
+                                <div className="w-48 h-48 bg-black rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-sm relative">
+                                    <img src={gradcamImage} alt="GradCAM overlay" className="w-full h-full object-cover" />
+                                    <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] p-1 text-center">GradCAM</div>
+                                </div>
+                            )}
                         </div>
+
                         <div className="flex-1 space-y-4">
                             <h3 className="text-sm font-bold text-slate-400 uppercase border-b border-slate-100 pb-2">{t('report.tech_section')}</h3>
                             <div className="grid grid-cols-2 gap-4">

@@ -1,4 +1,5 @@
 # backend/uploads/main.py
+import base64
 import os
 import shutil
 import asyncio
@@ -9,7 +10,7 @@ from typing import Optional, List
 
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status, Form, Header
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status, Form, Header, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -43,7 +44,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # --- SYSTÈME DE TRADUCTION BACKEND ---
-# Dictionnaire des messages API
 MESSAGES = {
     "fr": {
         "email_taken": "Email déjà utilisé",
@@ -107,11 +107,9 @@ MESSAGES = {
     }
 }
 
-# Fonction helper pour récupérer la langue et les messages
 def get_messages(accept_language: str = Header("fr")):
-    # On prend les 2 premiers caractères (ex: "fr-FR" -> "fr")
     lang_code = accept_language.split(",")[0].split("-")[0]
-    return MESSAGES.get(lang_code, MESSAGES["fr"]) # Fallback sur FR
+    return MESSAGES.get(lang_code, MESSAGES["fr"])
 
 def get_language_name(accept_language: str = Header("fr")):
     lang_code = accept_language.split(",")[0].split("-")[0]
@@ -152,6 +150,7 @@ class Analysis(Base):
     __tablename__ = "analyses"
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String, index=True)
+    gradcam_filename = Column(String, nullable=True) # ✅ Colonne ajoutée pour stocker le nom du fichier GradCAM
     has_glaucoma = Column(Boolean)
     confidence = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow)
@@ -187,6 +186,7 @@ class AnalysisResponse(BaseModel):
     confidence: float
     timestamp: datetime
     image_url: Optional[str] = None
+    gradcam_url: Optional[str] = None # ✅ Ajouté pour le frontend
     is_expired: bool = False
     patient_name: Optional[str] = None
 
@@ -221,8 +221,6 @@ def authenticate_user(db: Session, email: str, password: str):
     return user
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    # Note: On garde le message d'erreur hardcodé ici car il est souvent interne au protocole OAuth
-    # mais on pourrait le traduire aussi si besoin strict.
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not authenticate",
@@ -265,7 +263,7 @@ async def lifespan(app: FastAPI):
 # --- APP ---
 app = FastAPI(lifespan=lifespan)
 
-# Middleware pour CORS (Images statiques)
+# Middleware pour CORS
 class ForceCorsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -292,13 +290,13 @@ app.mount("/images", StaticFiles(directory=UPLOAD_DIRECTORY), name="images")
 def signup(
         user_in: UserCreate,
         db: Session = Depends(get_db),
-        accept_language: str = Header("fr") # ✅ Réception de la langue
+        accept_language: str = Header("fr")
 ):
     msgs = get_messages(accept_language)
     try:
         existing_user = get_user_by_email(db, user_in.email)
         if existing_user:
-            raise HTTPException(status_code=400, detail=msgs["email_taken"]) # ✅ Message traduit
+            raise HTTPException(status_code=400, detail=msgs["email_taken"])
 
         hashed_password = get_password_hash(user_in.password)
         new_user = User(email=user_in.email, hashed_password=hashed_password)
@@ -319,7 +317,7 @@ def login_for_access_token(
     msgs = get_messages(accept_language)
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msgs["login_fail"]) # ✅ Traduit
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msgs["login_fail"])
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -331,26 +329,21 @@ async def chat_with_doctor(
         file: UploadFile = File(None),
         history: str = Form("[]"),
         analysis_context: str = Form(None),
-        accept_language: str = Header("fr") # ✅ Récupération de la langue
+        accept_language: str = Header("fr")
 ):
     msgs = get_messages(accept_language)
-    lang_name = get_language_name(accept_language) # ex: "English"
+    lang_name = get_language_name(accept_language)
 
-    # ✅ INSTRUCTION SYSTÈME DYNAMIQUE
     system_instruction = f"""
     You are an AI Clinical Assistant specialized in Ophthalmology.
-    
     IMPORTANT: You MUST answer in {lang_name}.
-    
     YOUR ROLE:
     1. Assist the doctor in interpreting fundus images.
     2. Suggest medical reports using technical terminology appropriate for {lang_name}.
     3. Propose differential diagnoses.
-    
     TONE: Professional, concise, technical, factual. No "I am an AI", go straight to the medical point.
     """
 
-    # 1. ANALYSE IMAGE
     current_image_context = ""
     if file:
         file_location = os.path.join(UPLOAD_DIRECTORY, f"chat_{file.filename}")
@@ -365,17 +358,14 @@ async def chat_with_doctor(
 
             if response.status_code == 200:
                 result = response.json()
-                # ✅ Statut traduit pour l'IA
                 status_txt = msgs["glaucoma_high"] if result['prediction_class'] == 1 else msgs["glaucoma_low"]
                 confiance = f"{result['probability']*100:.1f}%"
                 current_image_context = f"[IMAGE CONTEXT]\nStatus: {status_txt}\nConfidence: {confiance}\n"
         except Exception as e:
             current_image_context = f"[ERROR] Image analysis failed: {str(e)}"
 
-    # 2. CONTEXTE
     final_context_str = current_image_context if current_image_context else (analysis_context or "")
 
-    # 3. MESSAGES
     try:
         messages_history = json.loads(history)
     except:
@@ -388,7 +378,6 @@ async def chat_with_doctor(
     final_user_content = f"{final_context_str}\n\nQuestion: {message}" if final_context_str else message
     gpt_messages.append({"role": "user", "content": final_user_content})
 
-    # 4. GÉNÉRATION
     async def generate_response():
         try:
             stream = openai_client.chat.completions.create(
@@ -415,6 +404,7 @@ def get_my_patients(current_user: User = Depends(get_current_user), db: Session 
 @app.get("/patients/{patient_id}", response_model=PatientDetail)
 def get_patient_details(
         patient_id: int,
+        request: Request,
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db),
         accept_language: str = Header("fr")
@@ -426,7 +416,7 @@ def get_patient_details(
     ).first()
 
     if not patient:
-        raise HTTPException(status_code=404, detail=msgs["patient_404"]) # ✅ Traduit
+        raise HTTPException(status_code=404, detail=msgs["patient_404"])
 
     analyses_formatted = []
     sorted_analyses = sorted(patient.analyses, key=lambda x: x.timestamp, reverse=True)
@@ -434,7 +424,17 @@ def get_patient_details(
     for ana in sorted_analyses:
         file_path = os.path.join(UPLOAD_DIRECTORY, ana.filename)
         exists = os.path.exists(file_path)
-        image_url = f"http://localhost:8000/images/{ana.filename}" if exists else None
+        
+        # URL de base pour les images
+        base_url = str(request.base_url).rstrip("/")
+        image_url = f"{base_url}/images/{ana.filename}" if exists else None
+        
+        # ✅ Construction URL GradCAM
+        gradcam_url = None
+        if ana.gradcam_filename:
+             gradcam_path = os.path.join(UPLOAD_DIRECTORY, ana.gradcam_filename)
+             if os.path.exists(gradcam_path):
+                gradcam_url = f"{base_url}/images/{ana.gradcam_filename}"
 
         analyses_formatted.append({
             "id": ana.id,
@@ -443,6 +443,7 @@ def get_patient_details(
             "confidence": ana.confidence,
             "timestamp": ana.timestamp,
             "image_url": image_url,
+            "gradcam_url": gradcam_url, # ✅ Ajouté
             "is_expired": not exists,
             "patient_name": patient.full_name
         })
@@ -475,13 +476,14 @@ def create_patient(
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
-    return {"message": msgs["patient_created"], "patient": new_patient} # ✅ Traduit
+    return {"message": msgs["patient_created"], "patient": new_patient}
 
 
 # --- Routes Upload & History ---
 
 @app.post("/uploadfile/")
 async def create_upload_file(
+        request: Request, # <--- 1. AJOUT IMPORTANT ICI
         file: UploadFile = File(...),
         patient_id: int = Form(...),
         current_user: User = Depends(get_current_user),
@@ -491,21 +493,28 @@ async def create_upload_file(
     msgs = get_messages(accept_language)
 
     if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail=msgs["file_invalid"]) # ✅ Traduit
+        raise HTTPException(status_code=400, detail=msgs["file_invalid"])
 
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     clean_filename = f"{timestamp_str}_{file.filename}"
     file_location = os.path.join(UPLOAD_DIRECTORY, clean_filename)
 
+    # Vérification patient
+    patient = db.query(Patient).filter(Patient.id == patient_id, Patient.doctor_id == current_user.id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail=msgs["patient_404"])
+
     try:
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"{msgs['save_error']}: {e}") # ✅ Traduit
+        raise HTTPException(status_code=500, detail=f"{msgs['save_error']}: {e}")
     finally:
         await file.close()
 
     analysis_result = {}
+    gradcam_url = None # Variable pour stocker l'URL
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             with open(file_location, "rb") as f:
@@ -514,37 +523,64 @@ async def create_upload_file(
 
             if response.status_code == 200:
                 analysis_result = response.json()
+                
+                # 1. Gestion du GradCAM (Extraction & Sauvegarde)
+                gradcam_fname = None
+                if analysis_result.get("gradcam_image"):
+                    try:
+                        img_b64 = analysis_result["gradcam_image"]
+                        if "," in img_b64:
+                            img_b64 = img_b64.split(",", 1)[1]
+                        
+                        gradcam_fname = f"gradcam_{clean_filename}"
+                        gradcam_path = os.path.join(UPLOAD_DIRECTORY, gradcam_fname)
+                        
+                        with open(gradcam_path, "wb") as gf:
+                            gf.write(base64.b64decode(img_b64))
+                        
+                        # 2. CONSTRUCTION DE L'URL IMMÉDIATE
+                        base_url = str(request.base_url).rstrip("/")
+                        gradcam_url = f"{base_url}/images/{gradcam_fname}"
 
-                patient = db.query(Patient).filter(Patient.id == patient_id, Patient.doctor_id == current_user.id).first()
-                if not patient:
-                    raise HTTPException(status_code=404, detail=msgs["patient_404"])
+                    except Exception as e:
+                        print(f"Erreur sauvegarde GradCAM: {e}")
 
+                # 3. Enregistrement Base de Données
                 new_analysis = Analysis(
                     filename=clean_filename,
+                    gradcam_filename=gradcam_fname, 
                     has_glaucoma=bool(analysis_result.get("prediction_class") == 1),
                     confidence=float(analysis_result.get("probability", 0)),
                     user_id=current_user.id,
-                    patient_id=patient.id
+                    patient_id=patient.id,
+                    timestamp=datetime.utcnow()
                 )
                 db.add(new_analysis)
                 db.commit()
+                db.refresh(new_analysis)
+
             else:
                 analysis_result = {"error": "Erreur DL", "details": response.text}
     except httpx.RequestError:
-        analysis_result = {"error": msgs["dl_error"]} # ✅ Traduit
+        analysis_result = {"error": msgs["dl_error"]}
 
     return {
         "filename": clean_filename,
-        "message": msgs["analysis_done"], # ✅ Traduit
+        "message": msgs["analysis_done"],
         "analysis": {
             **analysis_result,
-            "patient_name": patient.full_name if 'patient' in locals() and patient else "Inconnu"
+            "gradcam_image": None, # On n'envoie pas le base64 (trop lourd)
+            "gradcam_url": gradcam_url, # <--- 3. ON ENVOIE L'URL ICI POUR L'AFFICHAGE IMMÉDIAT
+            "patient_name": patient.full_name
         }
     }
 
 @app.get("/history", response_model=List[AnalysisResponse])
-def get_user_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Pas de message utilisateur ici, juste des données, donc pas de traduction nécessaire
+def get_user_history(
+    request: Request,
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
     analyses = db.execute(
         select(Analysis)
         .where(Analysis.user_id == current_user.id)
@@ -552,10 +588,20 @@ def get_user_history(current_user: User = Depends(get_current_user), db: Session
     ).scalars().all()
 
     history_data = []
+    base_url = str(request.base_url).rstrip("/")
+
     for ana in analyses:
         file_path = os.path.join(UPLOAD_DIRECTORY, ana.filename)
         exists = os.path.exists(file_path)
-        image_url = f"http://localhost:8000/images/{ana.filename}" if exists else None
+        image_url = f"{base_url}/images/{ana.filename}" if exists else None
+        
+        # ✅ Construction URL GradCAM
+        gradcam_url = None
+        if ana.gradcam_filename:
+             gradcam_path = os.path.join(UPLOAD_DIRECTORY, ana.gradcam_filename)
+             if os.path.exists(gradcam_path):
+                gradcam_url = f"{base_url}/images/{ana.gradcam_filename}"
+
         pat_name = ana.patient.full_name if ana.patient else "Inconnu"
 
         history_data.append({
@@ -565,6 +611,7 @@ def get_user_history(current_user: User = Depends(get_current_user), db: Session
             "confidence": ana.confidence,
             "timestamp": ana.timestamp,
             "image_url": image_url,
+            "gradcam_url": gradcam_url, # ✅ Ajouté
             "is_expired": not exists,
             "patient_name": pat_name
         })
@@ -598,8 +645,6 @@ async def chat_guide(
 ):
     lang_name = get_language_name(accept_language)
 
-    # 👇 CONTEXTE FONCTIONNEL (Mode d'emploi)
-    # On laisse le manuel en français pour l'instant (l'IA traduira à la volée)
     app_manual = """
     APP MANUAL:
     1. DASHBOARD: Home screen with stats and 'New Patient'.
@@ -609,17 +654,13 @@ async def chat_guide(
     5. REPORT PDF: Downloadable medical report.
     """
 
-    # ✅ INSTRUCTION TRADUITE
     system_instruction = f"""
     You are the "Support Guide" for GlaucomaAI.
-    
     IMPORTANT: You MUST answer in {lang_name}.
-    
     RULES:
     1. Explain HOW to use the app based on the manual below.
     2. NO technical talk (Python, React, etc.).
     3. Be short, polite, helpful.
-
     {app_manual}
     """
 

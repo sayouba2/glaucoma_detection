@@ -6,6 +6,9 @@ from model_utils import load_model_weights
 from image_utils import preprocess_image_from_bytes, prepare_tensor, generate_gradcam_base64
 import logging
 
+from image_utils import preprocess_image_from_bytes, prepare_tensor, generate_gradcam_base64, generate_gradcam_png_bytes
+from fastapi.responses import Response
+
 # --- Configuration ---
 MODEL_PATH = "best_model.pth"
 logger = logging.getLogger("uvicorn")
@@ -74,3 +77,23 @@ async def analyze_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
 
 # Lancer avec: uvicorn main:app --reload --port 8001
+
+@app.post("/heatmap/")
+async def heatmap_image(file: UploadFile = File(...)):
+    if ml_models.get("glaucoma_net") is None:
+        raise HTTPException(status_code=503, detail="Le modèle n'est pas chargé.")
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Fichier invalide.")
+
+    contents = await file.read()
+    try:
+        pil_image = preprocess_image_from_bytes(contents)
+        image_tensor = prepare_tensor(pil_image)
+        model = ml_models["glaucoma_net"]
+
+        # GradCAM nécessite backward -> on n'utilise pas torch.no_grad()
+        png_bytes = generate_gradcam_png_bytes(model, image_tensor)
+        return Response(content=png_bytes, media_type="image/png")
+    except Exception as e:
+        logger.error(f"Erreur heatmap: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur generation heatmap: {e}")
