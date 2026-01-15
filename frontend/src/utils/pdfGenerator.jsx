@@ -3,7 +3,8 @@ import QRCode from 'qrcode';
 // ✅ 1. Import de la police
 import { amiriFontBase64 } from './AmiriFont';
 
-export const generateGlaucomaReport = async (data, imageUrl, t) => {
+// ✅ Signature mise à jour pour accepter gradcamImage
+export const generateGlaucomaReport = async (data, imageUrl, gradcamImage, t) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -19,20 +20,6 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
     // --- PETITE ASTUCE POUR L'ARABE (RTL) ---
     // Si le titre contient des caractères arabes, on considère que c'est un doc arabe
     const isArabic = /[\u0600-\u06FF]/.test(t('report.doc_title'));
-
-    // Fonction helper pour aligner le texte correctement selon la langue
-    const alignText = (text, x, y, align = 'left') => {
-        // Si c'est de l'arabe, jsPDF a parfois besoin d'aide.
-        // Mais avec la police Amiri, l'affichage devrait être correct.
-        // Si tu veux inverser l'alignement pour l'arabe (droite au lieu de gauche):
-        if (isArabic && align === 'left') align = 'right';
-        if (isArabic && align === 'right') align = 'left';
-
-        // Note: Pour un support RTL parfait (lettres attachées), jsPDF est parfois capricieux.
-        // La police Amiri résout les caractères bizarres. Si les lettres sont détachées,
-        // il faudra inverser le texte, mais commençons déjà par afficher les bons caractères.
-        doc.text(text, x, y, { align: align });
-    };
 
     // --- 1. EN-TÊTE ---
     doc.setFontSize(22);
@@ -72,28 +59,19 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
     doc.setFontSize(10);
     doc.setTextColor(80);
 
-    // En arabe, on aligne tout à droite
     if (isArabic) {
         doc.text(`${data.patientName} : ${t('dashboard.table_name')}`, pageWidth - 20, yPos, { align: 'right' });
         doc.text(`${data.patientAge} ${t('common.years')} : ${t('dashboard.table_age')}`, pageWidth - 80, yPos, { align: 'right' });
-        // ... adapter les positions X pour l'arabe est fastidieux manuellement
-        // Pour faire simple, on garde la structure gauche-droite mais avec la bonne police
-        // Si tu veux un VRAI mode miroir, c'est beaucoup de calculs X.
-        // Ici, on s'assure juste que les CARACTÈRES s'affichent.
     } else {
         doc.text(`${t('dashboard.table_name')} : ${data.patientName}`, 20, yPos);
         doc.text(`${t('dashboard.table_age')} : ${data.patientAge} ${t('common.years')}`, 100, yPos);
         doc.text(`${t('dashboard.table_gender')} : ${data.patientGender === 'M' ? t('dashboard.gender_m') : t('dashboard.gender_f')}`, 160, yPos);
     }
 
-    // NOTE : J'ai remis le code standard ci-dessous, car la priorité est d'afficher les caractères.
-    // La police "Amiri" va corriger les carrés.
     if (isArabic) {
-        // Fallback simple pour l'arabe : on écrit tout, jsPDF avec Amiri va afficher les lettres.
-        // Si les lettres sont inversées (gauche à droite), c'est un autre souci technique de jsPDF
-        // mais les "caractères bizarres" seront partis.
         doc.text(`${t('dashboard.table_name')} : ${data.patientName}`, 180, yPos, {align:'right'});
     }
+
     // --- 3. IMAGE & DONNÉES TECHNIQUES ---
     yPos += 20;
     doc.setFontSize(14);
@@ -103,21 +81,36 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
     yPos += 10;
     if (imageUrl) {
         try {
+            // Image originale
             doc.addImage(imageUrl, 'JPEG', 20, yPos, 50, 50);
+
+            // ✅ Insertion GradCAM
+            if (gradcamImage) {
+                try {
+                    // Positionné à x=80 (à droite de l'image originale)
+                    doc.addImage(gradcamImage, 'PNG', 80, yPos, 50, 50);
+                } catch (e) {
+                    try { doc.addImage(gradcamImage, 'JPEG', 80, yPos, 50, 50); } catch(_) {}
+                }
+            }
+
+            // Calcul de la position du texte (si GradCAM existe, on déplace le texte à droite pour ne pas écrire dessus)
+            // 20 (img1) + 50 (width) + 10 (gap) + 50 (img2 width) + 10 (gap) = 140
+            const textXPos = gradcamImage ? 140 : 80;
 
             doc.setFontSize(10);
             doc.setTextColor(80);
-            doc.text(`${t('report.eye_examined')} : ${data.eyeSide}`, 80, yPos + 10);
-            doc.text(`${t('report.image_quality')} : ${data.imageQuality}`, 80, yPos + 20);
+            doc.text(`${t('report.eye_examined')} : ${data.eyeSide}`, textXPos, yPos + 10);
+            doc.text(`${t('report.image_quality')} : ${data.imageQuality}`, textXPos, yPos + 20);
 
-            doc.text(`${t('report.ai_analysis')} :`, 80, yPos + 35);
+            doc.text(`${t('report.ai_analysis')} :`, textXPos, yPos + 35);
             doc.setFontSize(12);
             if (data.aiResult.includes(t('upload.glaucoma_detected'))) {
                 doc.setTextColor(220, 53, 69);
             } else {
                 doc.setTextColor(40, 167, 69);
             }
-            doc.text(`${data.aiResult} (${data.aiConfidence}%)`, 80, yPos + 42);
+            doc.text(`${data.aiResult} (${data.aiConfidence}%)`, textXPos, yPos + 42);
 
             yPos += 60;
         } catch (e) {
@@ -169,15 +162,12 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
     });
 
     // --- 7. PIED DE PAGE & SIGNATURE QR ---
-    // On fixe la position en bas de page (par exemple à 40 unités du bas)
     const footerY = pageHeight - 40;
 
     doc.setDrawColor(200);
     doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
 
-    // GÉNÉRATION DU QR CODE
     try {
-        // Données à encoder dans le QR
         const qrData = JSON.stringify({
             doc: data.doctorName,
             patient: data.patientName,
@@ -186,16 +176,12 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
             id: data.patientId
         });
 
-        // Création de l'image QR
         const qrCodeUrl = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
-
-        // Affichage du QR à droite
         doc.addImage(qrCodeUrl, 'PNG', pageWidth - 50, footerY, 30, 30);
 
-        // Texte explicatif à côté
         doc.setFontSize(8);
         doc.setTextColor(100);
-        doc.text(t('report.signature'), pageWidth - 55, footerY + 10, { align: 'right' }); // "Signature"
+        doc.text(t('report.signature'), pageWidth - 55, footerY + 10, { align: 'right' });
         doc.text(`Dr. ${data.doctorName}`, pageWidth - 55, footerY + 15, { align: 'right' });
         doc.text(t('report.digital_validation'), pageWidth - 55, footerY + 20, { align: 'right' });
 
@@ -203,11 +189,9 @@ export const generateGlaucomaReport = async (data, imageUrl, t) => {
         console.error("Erreur QR Code", err);
     }
 
-    // Copyright centré tout en bas
     doc.setFontSize(8);
     doc.setTextColor(180);
     doc.text(`${t('report.generated_by')} - ${new Date().toLocaleString()}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
 
-    // Sauvegarde
     doc.save(`Rapport_${data.patientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

@@ -6,7 +6,8 @@ import ImageUploader from './components/ImageUploader.jsx';
 import Login from './components/Login.jsx';
 import Signup from './components/Signup.jsx';
 import Home from './components/Home.jsx';
-import { Activity, LogOut, Clock, User, Home as HomeIcon, LayoutDashboard, Globe } from 'lucide-react'; // ✅ Ajout Globe
+// ✅ CORRECTION ICI : Ajout de Loader2 dans les imports
+import { Activity, LogOut, Clock, User, Home as HomeIcon, LayoutDashboard, Globe, Loader2 } from 'lucide-react';
 import './App.css';
 import History from './components/History.jsx';
 import ChatBot from './components/ChatBot';
@@ -19,6 +20,8 @@ const PrivateRoute = ({ children }) => {
     const token = localStorage.getItem('token');
     return token ? children : <Navigate to="/login" replace />;
 };
+
+// Composant de chargement
 const Loading = () => (
     <div className="flex h-screen w-full items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-2 text-slate-500">
@@ -27,6 +30,7 @@ const Loading = () => (
         </div>
     </div>
 );
+
 // Composant pour les liens actifs
 function NavLink({ to, children, icon: Icon }) {
     const location = useLocation();
@@ -138,7 +142,7 @@ function AppContent() {
         document.body.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
 
         // ✅ APRÈS (On force la direction Gauche -> Droite pour tout le monde) :
-       // document.body.dir = 'ltr';
+        // document.body.dir = 'ltr';
 
         // On garde juste le changement de police (optionnel) pour que l'arabe soit joli
         document.body.className = i18n.language === 'ar' ? 'font-arabic bg-slate-50' : 'font-sans bg-slate-50';
@@ -210,7 +214,7 @@ export default function App() {
     return (
         <BrowserRouter>
             <Suspense fallback={<Loading />}>
-            <AppContent />
+                <AppContent />
             </Suspense>
         </BrowserRouter>
     );
