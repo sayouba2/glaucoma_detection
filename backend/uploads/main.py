@@ -242,7 +242,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 # --- Config Dossiers ---
 UPLOAD_DIRECTORY = "uploaded_images"
-DL_SERVICE_URL = "http://localhost:8001/analyze/"
+DL_SERVICE_URL = os.getenv("DL_SERVICE_URL", "http://localhost:8001/analyze/")
 os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
 # --- Lifespan ---
@@ -492,11 +492,21 @@ async def create_upload_file(
 ):
     msgs = get_messages(accept_language)
 
-    if not file.content_type.startswith('image/'):
+    # --- MODIFICATION DICOM ---
+    import pydicom
+    from PIL import Image
+    import numpy as np
+    import io
+
+    is_dicom = file.filename.lower().endswith('.dcm') or file.content_type == 'application/dicom'
+    
+    if not is_dicom and not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail=msgs["file_invalid"])
 
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    clean_filename = f"{timestamp_str}_{file.filename}"
+    # Si c'est un DICOM, on le convertira en PNG
+    extension = ".png" if is_dicom else os.path.splitext(file.filename)[1]
+    clean_filename = f"{timestamp_str}_{os.path.splitext(file.filename)[0]}{extension}"
     file_location = os.path.join(UPLOAD_DIRECTORY, clean_filename)
 
     # Vérification patient
@@ -505,8 +515,31 @@ async def create_upload_file(
         raise HTTPException(status_code=404, detail=msgs["patient_404"])
 
     try:
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        content = await file.read()
+        if is_dicom:
+            try:
+                # Lecture DICOM
+                ds = pydicom.dcmread(io.BytesIO(content))
+                pixel_array = ds.pixel_array
+                
+                # Normalisation si nécessaire (ex: convertir en uint8)
+                if 'RescaleSlope' in ds and 'RescaleIntercept' in ds:
+                     pixel_array = pixel_array * ds.RescaleSlope + ds.RescaleIntercept
+
+                # Normalisation 0-255 pour l'image
+                pixel_array = pixel_array.astype(float)
+                pixel_array = (np.maximum(pixel_array, 0) / pixel_array.max()) * 255.0
+                pixel_array = np.uint8(pixel_array)
+
+                # Conversion en Image PIL
+                image = Image.fromarray(pixel_array)
+                image.save(file_location)
+            except Exception as e:
+                 raise HTTPException(status_code=400, detail=f"Invalid DICOM: {e}")
+        else:
+            # Sauvegarde directe pour les images
+            with open(file_location, "wb") as buffer:
+                buffer.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{msgs['save_error']}: {e}")
     finally:

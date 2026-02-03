@@ -1,0 +1,45 @@
+services:
+  # 1. AI Service (Deep Learning)
+  dl_api:
+    build: ./backend/DL_API
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend/DL_API:/app # Development volume mapping for hot reload (optional)
+      - ./backend/DL_API/best_model.pth:/app/best_model.pth # Ensure model is mounted if not copied
+    networks:
+      - glaucoma_net
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+
+  # 2. Orchestrator Service (Uploads/Auth)
+  uploads:
+    build: ./backend/uploads
+    ports:
+      - "8000:8000"
+    environment:
+      - DL_SERVICE_URL=http://dl_api:8001/analyze/
+      - JWT_SECRET=dev_secret_change_in_prod
+      - OPENAI_API_KEY=${OPENAI_API_KEY} # Pass through from host
+    volumes:
+      - ./backend/uploads:/app
+      - ./backend/uploads/auth.db:/app/auth.db # Persist DB
+      - ./backend/uploads/uploaded_images:/app/uploaded_images # Persist images
+    networks:
+      - glaucoma_net
+    depends_on:
+      - dl_api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+  # 3. Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80" # Map container port 80 (nginx) to host 3000
+    networks:
+      - glaucoma_net
+    depends_on:
+      - uploads
+
+networks:
+  glaucoma_net:
+    driver: bridge

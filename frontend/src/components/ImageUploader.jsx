@@ -10,6 +10,7 @@ import Fundus3DViewer from './Fundus3DViewer';
 // Assurez-vous que ce composant existe ou retirez l'import s'il n'est pas utilisé
 // import Fundus3DTrue from './Fundus3DTrue'; 
 import DoctorChat from './DoctorChat';
+import BeforeAfterSlider from './BeforeAfterSlider';
 
 const API_URL_BASE = 'http://localhost:8000';
 const API_URL = `${API_URL_BASE}/uploadfile/`;
@@ -108,8 +109,8 @@ const GlaucomaDetectionApp = () => {
       const confidencePercent = (analysis.probability * 100).toFixed(1);
 
       const dynamicRecommendations = isGlaucoma
-          ? [t('history.reco_oct'), t('upload.reco_pressure')]
-          : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')];
+        ? [t('history.reco_oct'), t('upload.reco_pressure')]
+        : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')];
 
       // --- CORRECTION ICI ---
       // On vérifie si l'URL existe (nouveau backend), sinon on prend l'image brute (ancien backend/fallback)
@@ -124,7 +125,7 @@ const GlaucomaDetectionApp = () => {
         prediction_class: analysis.prediction_class,
         probability: analysis.probability
       };
-      
+
       setAnalysisResult(realResult);
       setUploadStatus(t('upload.status_done'));
     } catch (err) {
@@ -152,247 +153,218 @@ const GlaucomaDetectionApp = () => {
   const handleReset = () => { setSelectedFile(null); setPreviewUrl(''); setUploadStatus(''); setError(''); setAnalysisResult(null); setIsAnalyzing(false); };
 
   return (
-      <div className="max-w-7xl mx-auto fade-in pb-12">
+    <div className="max-w-7xl mx-auto fade-in pb-12">
 
-        {/* HEADER DE L'APP */}
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 mb-6">
+      {/* HEADER DE L'APP */}
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 mb-6">
 
-          {/* --- PARTIE 1 : UPLOAD --- */}
-          {!analysisResult ? (
-              <>
-                <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-10 text-center text-white relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                  <h1 className="text-3xl font-bold mb-2 relative z-10">{t('upload.title')}</h1>
-                  <p className="text-slate-300 relative z-10">{t('upload.subtitle')}</p>
-                </div>
+        {/* --- PARTIE 1 : UPLOAD --- */}
+        {!analysisResult ? (
+          <>
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-10 text-center text-white relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+              <h1 className="text-3xl font-bold mb-2 relative z-10">{t('upload.title')}</h1>
+              <p className="text-slate-300 relative z-10">{t('upload.subtitle')}</p>
+            </div>
 
-                <div className="p-10">
+            <div className="p-10">
 
-                  {/* SÉLECTION DU PATIENT */}
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6 max-w-xl mx-auto">
-                    <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                      <Users size={16} className="text-blue-600"/> {t('upload.select_patient')}
-                    </h3>
-                    <select
-                        value={selectedPatient ? selectedPatient.id : ""}
-                        onChange={(e) => {
-                          const p = patients.find(pat => pat.id === parseInt(e.target.value));
-                          setSelectedPatient(p);
-                        }}
-                        className="w-full p-2 border rounded"
-                    >
-                      <option value="">{t('upload.choose_placeholder')}</option>
-                      {patients.map(p => (
-                          <option key={p.id} value={p.id}>{p.full_name} ({p.age} {t('common.years')})</option>
-                      ))}
-                    </select>
-                  </div>
+              {/* SÉLECTION DU PATIENT */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6 max-w-xl mx-auto">
+                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <Users size={16} className="text-blue-600" /> {t('upload.select_patient')}
+                </h3>
+                <select
+                  value={selectedPatient ? selectedPatient.id : ""}
+                  onChange={(e) => {
+                    const p = patients.find(pat => pat.id === parseInt(e.target.value));
+                    setSelectedPatient(p);
+                  }}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">{t('upload.choose_placeholder')}</option>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name} ({p.age} {t('common.years')})</option>
+                  ))}
+                </select>
+              </div>
 
-                  {/* Zone de Drop */}
-                  <div
-                      className={`
+              {/* Zone de Drop */}
+              <div
+                className={`
                         relative group border-3 border-dashed rounded-2xl p-12 text-center transition-all duration-300
                         ${isDragging ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}
                         ${!previewUrl ? 'cursor-pointer' : ''}
                       `}
-                      onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
-                      onClick={() => !previewUrl && document.getElementById('fileInput').click()}
-                  >
-                    {!previewUrl ? (
-                        <div className="flex flex-col items-center">
-                          <div className="p-4 bg-slate-100 text-slate-600 rounded-full mb-4 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                            <Upload size={32} />
-                          </div>
-                          <h3 className="text-lg font-semibold text-slate-700">{t('upload.drop_title')}</h3>
-                          <p className="text-slate-400 text-sm mt-1">{t('upload.drop_subtitle')}</p>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center relative z-10">
-                          <img src={previewUrl} alt="Preview" className="h-48 object-contain rounded-lg shadow-sm border border-slate-200" />
-                          <button
-                              onClick={(e) => { e.stopPropagation(); handleReset(); }}
-                              className="absolute -top-3 -right-3 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600"
-                          >
-                            <RefreshCw size={14} />
-                          </button>
-                        </div>
-                    )}
-                    <input id="fileInput" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
+                onClick={() => !previewUrl && document.getElementById('fileInput').click()}
+              >
+                {!previewUrl ? (
+                  <div className="flex flex-col items-center">
+                    <div className="p-4 bg-slate-100 text-slate-600 rounded-full mb-4 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                      <Upload size={32} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-700">{t('upload.drop_title')}</h3>
+                    <p className="text-slate-400 text-sm mt-1">{t('upload.drop_subtitle')}</p>
                   </div>
-
-                  {/* Bouton Action */}
-                  <div className="mt-8 flex justify-center">
+                ) : (
+                  <div className="flex flex-col items-center relative z-10">
+                    <img src={previewUrl} alt="Preview" className="h-48 object-contain rounded-lg shadow-sm border border-slate-200" />
                     <button
-                        onClick={handleFileUpload}
-                        disabled={!selectedFile || isAnalyzing}
-                        className={`
+                      onClick={(e) => { e.stopPropagation(); handleReset(); }}
+                      className="absolute -top-3 -right-3 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  </div>
+                )}
+                <input id="fileInput" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+              </div>
+
+              {/* Bouton Action */}
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleFileUpload}
+                  disabled={!selectedFile || isAnalyzing}
+                  className={`
                             px-8 py-3 rounded-full font-bold shadow-lg transition-all flex items-center gap-2
                             ${!selectedFile || isAnalyzing
-                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105'
-                        }
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105'
+                    }
                         `}
+                >
+                  {isAnalyzing ? <><Loader2 className="animate-spin" size={20} /> {t('upload.btn_processing')}</> : <><Activity size={20} /> {t('upload.btn_analyze')}</>}
+                </button>
+              </div>
+
+              {/* Status */}
+              {uploadStatus && !error && (
+                <div className="mt-4 text-center text-blue-600 font-medium animate-pulse">{uploadStatus}</div>
+              )}
+              {error && <div className="mt-4 text-center text-red-500 text-sm font-medium">{error}</div>}
+            </div>
+
+            <div className="bg-blue-50 p-4 border-t border-blue-100 flex justify-center items-center gap-2 text-blue-700 text-sm">
+              <Info size={16} /> {t('upload.secure_mode')}
+            </div>
+          </>
+        ) : (
+
+          /* --- PARTIE 2 : RÉSULTATS --- */
+          <div className="bg-slate-50 min-h-screen flex flex-col">
+
+            {/* Header Resultats */}
+            <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Activity className="text-blue-600" />
+                {t('upload.result_title')}
+              </h2>
+              <button onClick={handleReset} className="text-sm font-medium text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
+                <RefreshCw size={16} /> {t('upload.new_image')}
+              </button>
+            </div>
+
+            <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] overflow-hidden">
+
+              {/* --- COLONNE GAUCHE (Résultats, Images, 3D, Heatmap) --- */}
+              <div className="w-full lg:w-1/2 h-full overflow-y-auto p-6 border-r border-slate-200 bg-slate-50 scrollbar-thin scrollbar-thumb-slate-300">
+                <div className="flex flex-col gap-6">
+
+                  {/* 1. Carte de Résultat */}
+                  <div className={`p-6 rounded-2xl border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 ${analysisResult.hasGlaucoma ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
+                    <div className="flex items-center gap-4">
+                      {analysisResult.hasGlaucoma
+                        ? <div className="p-3 bg-red-100 text-red-600 rounded-full shadow-sm"><AlertTriangle size={32} /></div>
+                        : <div className="p-3 bg-green-100 text-green-600 rounded-full shadow-sm"><CheckCircle size={32} /></div>
+                      }
+                      <div>
+                        <h3 className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
+                          {analysisResult.hasGlaucoma ? t('upload.glaucoma_detected') : t('upload.healthy_retina')}
+                        </h3>
+                        <p className="text-slate-600 text-sm">{t('upload.confidence')} : <strong>{analysisResult.confidence}%</strong></p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleOpenReportEditor}
+                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 p-3 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
+                      title={t('upload.download_tooltip')}
                     >
-                      {isAnalyzing ? <><Loader2 className="animate-spin" size={20}/> {t('upload.btn_processing')}</> : <><Activity size={20}/> {t('upload.btn_analyze')}</>}
+                      <FileText size={24} />
                     </button>
                   </div>
 
-                  {/* Status */}
-                  {uploadStatus && !error && (
-                      <div className="mt-4 text-center text-blue-600 font-medium animate-pulse">{uploadStatus}</div>
-                  )}
-                  {error && <div className="mt-4 text-center text-red-500 text-sm font-medium">{error}</div>}
-                </div>
+                  {/* 2. Recommandations */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">{t('upload.recommendations')}</h3>
+                    <ul className="space-y-2">
+                      {(analysisResult.hasGlaucoma
+                        ? [t('history.reco_oct'), t('upload.reco_pressure')]
+                        : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')]
+                      ).map((rec, i) => (
+                        <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
+                          <span className="text-blue-500 mt-1">•</span> {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
 
-                <div className="bg-blue-50 p-4 border-t border-blue-100 flex justify-center items-center gap-2 text-blue-700 text-sm">
-                  <Info size={16} /> {t('upload.secure_mode')}
-                </div>
-              </>
-          ) : (
-
-              /* --- PARTIE 2 : RÉSULTATS --- */
-              <div className="bg-slate-50 min-h-screen flex flex-col">
-
-                {/* Header Resultats */}
-                <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
-                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Activity className="text-blue-600"/>
-                    {t('upload.result_title')}
-                  </h2>
-                  <button onClick={handleReset} className="text-sm font-medium text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
-                    <RefreshCw size={16}/> {t('upload.new_image')}
-                  </button>
-                </div>
-
-                <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] overflow-hidden">
-
-                  {/* --- COLONNE GAUCHE (Résultats, Images, 3D, Heatmap) --- */}
-                  <div className="w-full lg:w-1/2 h-full overflow-y-auto p-6 border-r border-slate-200 bg-slate-50 scrollbar-thin scrollbar-thumb-slate-300">
-                    <div className="flex flex-col gap-6">
-
-                      {/* 1. Carte de Résultat */}
-                      <div className={`p-6 rounded-2xl border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 ${analysisResult.hasGlaucoma ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                        <div className="flex items-center gap-4">
-                          {analysisResult.hasGlaucoma
-                              ? <div className="p-3 bg-red-100 text-red-600 rounded-full shadow-sm"><AlertTriangle size={32}/></div>
-                              : <div className="p-3 bg-green-100 text-green-600 rounded-full shadow-sm"><CheckCircle size={32}/></div>
-                          }
-                          <div>
-                            <h3 className={`text-xl font-bold ${analysisResult.hasGlaucoma ? 'text-red-700' : 'text-green-700'}`}>
-                              {analysisResult.hasGlaucoma ? t('upload.glaucoma_detected') : t('upload.healthy_retina')}
-                            </h3>
-                            <p className="text-slate-600 text-sm">{t('upload.confidence')} : <strong>{analysisResult.confidence}%</strong></p>
-                          </div>
-                        </div>
-                        <button
-                            onClick={handleOpenReportEditor}
-                            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 p-3 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title={t('upload.download_tooltip')}
-                        >
-                          <FileText size={24} />
-                        </button>
+                  {/* --- 3. Visualiseurs 3D --- */}
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+                      <p className="text-xs font-bold text-slate-400 mb-2 px-2">SIMULATION 2.5D</p>
+                      <div className="h-64 rounded-xl overflow-hidden bg-slate-900 relative">
+                        <Fundus3DViewer imageUrl={previewUrl} />
                       </div>
-
-                      {/* 2. Recommandations */}
-                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">{t('upload.recommendations')}</h3>
-                        <ul className="space-y-2">
-                          {(analysisResult.hasGlaucoma
-                                  ? [t('history.reco_oct'), t('upload.reco_pressure')]
-                                  : [t('upload.reco_normal'), t('history.reco_annual'), t('upload.reco_standard')]
-                          ).map((rec, i) => (
-                              <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
-                                <span className="text-blue-500 mt-1">•</span> {rec}
-                              </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* --- 3. Visualiseurs 3D --- */}
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
-                          <p className="text-xs font-bold text-slate-400 mb-2 px-2">SIMULATION 2.5D</p>
-                          <div className="h-64 rounded-xl overflow-hidden bg-slate-900 relative">
-                             <Fundus3DViewer imageUrl={previewUrl} />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* --- 4. Heatmap / XAI --- */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
-                             <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                                <Eye className="text-purple-600"/> Analyse Visuelle (GradCAM)
-                             </h3>
-                          </div>
-
-                          <div className="flex flex-col md:flex-row gap-4">
-                             {/* Image Originale */}
-                             <div className="flex-1">
-                                <p className="text-xs text-slate-500 mb-2 font-semibold">ORIGINALE</p>
-                                <img src={previewUrl} alt="Original" className="w-full rounded-xl border border-slate-200" />
-                             </div>
-
-                             {/* Heatmap */}
-                             <div className="flex-1">
-                                <p className="text-xs text-slate-500 mb-2 font-semibold">ZONES D'INTÉRÊT (HEATMAP)</p>
-                                {analysisResult.gradcamImage ? (
-                                   <div className="relative group">
-                                      <img src={analysisResult.gradcamImage} alt="GradCAM" className="w-full rounded-xl border border-slate-200" />
-                                      {/* Bouton téléchargement */}
-                                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                         <a
-                                           href={analysisResult.gradcamImage}
-                                           download={`heatmap_${Date.now()}.png`}
-                                           className="bg-white/90 p-2 rounded-lg text-xs font-bold shadow-sm hover:bg-white flex items-center gap-1"
-                                         >
-                                            <Maximize size={12} /> Télécharger
-                                         </a>
-                                      </div>
-                                   </div>
-                                ) : (
-                                   <div className="h-full min-h-[150px] flex items-center justify-center bg-slate-50 border border-dashed rounded-xl text-slate-400 text-sm">
-                                      Non disponible
-                                   </div>
-                                )}
-                             </div>
-                          </div>
-
-                          <div className="mt-4 flex gap-3">
-                             <button
-                                 onClick={() => {
-                                    if (!analysisResult.gradcamImage) return;
-                                    const w = window.open('', '_blank');
-                                    w.document.write(`<div style="display:flex;gap:10px;"><img src="${previewUrl}" style="width:45%"><img src="${analysisResult.gradcamImage}" style="width:45%"></div>`);
-                                 }}
-                                 className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition-colors"
-                             >
-                                Ouvrir Comparaison
-                             </button>
-                             <button
-                                 onClick={handleOpenReportEditor}
-                                 className="flex-1 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-sm font-bold rounded-lg transition-colors border border-purple-200"
-                             >
-                                Rapport PDF (+Heatmap)
-                             </button>
-                          </div>
-                      </div>
-
                     </div>
                   </div>
 
-                  {/* --- COLONNE DROITE : CHAT --- */}
-                  <div className="w-full lg:w-1/2 h-full bg-white flex flex-col">
-                    <DoctorChat
-                        analysisResult={analysisResult}
-                        imageUrl={previewUrl}
-                    />
+                  {/* --- 4. Heatmap / XAI --- */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                        <Eye className="text-purple-600" /> Analyse Visuelle (Comparaison AI)
+                      </h3>
+                    </div>
+
+                    {analysisResult.gradcamImage ? (
+                      <div className="w-full h-96 relative">
+                        <BeforeAfterSlider
+                          beforeImage={previewUrl}
+                          afterImage={analysisResult.gradcamImage}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-64 flex items-center justify-center bg-slate-50 border border-dashed rounded-xl text-slate-400">
+                        Heatmap non disponible
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex gap-3">
+                      <button
+                        onClick={handleOpenReportEditor}
+                        className="flex-1 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-sm font-bold rounded-lg transition-colors border border-purple-200"
+                      >
+                        Rapport PDF (+Heatmap)
+                      </button>
+                    </div>
                   </div>
+
                 </div>
               </div>
-          )}
-        </div>
+
+              {/* --- COLONNE DROITE : CHAT --- */}
+              <div className="w-full lg:w-1/2 h-full bg-white flex flex-col">
+                <DoctorChat
+                  analysisResult={analysisResult}
+                  imageUrl={previewUrl}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
   );
 };
 
